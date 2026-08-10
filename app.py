@@ -46,7 +46,7 @@ def init_and_repair_db():
     );
     """)
 
-    # Unit Conversions (Pozele 16 & 17)
+    # Unit Conversions
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS unit_conversions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -96,6 +96,15 @@ init_and_repair_db()
 def get_connection():
     return sqlite3.connect('erp_database.db')
 
+# Funcție Automată de Generare Cod de Bare MRPeasy
+def generate_storage_barcode(conn, location_name):
+    cursor = conn.cursor()
+    cursor.execute("SELECT MAX(id) FROM storage_locations")
+    res = cursor.fetchone()[0]
+    next_id = (res + 1) if res else 1
+    prefix_name = location_name.strip()[:10]
+    return f"99{prefix_name}91loc92{next_id}"
+
 # 3. Preluare Query Params
 query_params = st.query_params
 current_page = query_params.get("page", "Home")
@@ -103,7 +112,7 @@ current_subtab = query_params.get("subtab", "Items")
 current_setting = query_params.get("setting", "Product_groups")
 edit_uom_id = query_params.get("uom_id", None)
 
-# 4. CSS STILIZARE REPLICATĂ DUPĂ POZA 16
+# 4. CSS STILIZARE REPLICATĂ DUPĂ MRPEASY
 st.markdown("""
 <style>
     .stApp { background-color: #f8fafc; }
@@ -292,7 +301,11 @@ def process_mrpeasy_csv(df):
         loc_raw = row.get('default storage location', row.get('storage location', row.get('location', '-')))
         if pd.notnull(loc_raw) and str(loc_raw).strip() != '' and str(loc_raw).strip().lower() != 'nan':
             storage_loc = str(loc_raw).strip()
-            cursor.execute("INSERT OR IGNORE INTO storage_locations (name) VALUES (?)", (storage_loc,))
+            # Inserare cu generare de Barcode automat dacă nu există
+            cursor.execute("SELECT id FROM storage_locations WHERE name = ?", (storage_loc,))
+            if not cursor.fetchone():
+                auto_bc = generate_storage_barcode(conn, storage_loc)
+                cursor.execute("INSERT INTO storage_locations (name, site, barcode) VALUES (?, ?, ?)", (storage_loc, 'Main site', auto_bc))
         else:
             storage_loc = '-'
         
@@ -354,7 +367,9 @@ def process_storage_locations_csv(df):
             continue
             
         site = str(row.get('site', 'Main site')).strip()
-        barcode = str(row.get('barcode', '-')).strip()
+        barcode_val = str(row.get('barcode', '')).strip()
+        if not barcode_val or barcode_val == 'nan' or barcode_val == '-':
+            barcode_val = generate_storage_barcode(conn, loc_name)
 
         cursor.execute("SELECT id FROM storage_locations WHERE name = ?", (loc_name,))
         existing = cursor.fetchone()
@@ -364,13 +379,13 @@ def process_storage_locations_csv(df):
                 UPDATE storage_locations 
                 SET site=?, barcode=?
                 WHERE name=?
-            """, (site, barcode, loc_name))
+            """, (site, barcode_val, loc_name))
             updated_count += 1
         else:
             cursor.execute("""
                 INSERT INTO storage_locations (name, site, barcode)
                 VALUES (?, ?, ?)
-            """, (loc_name, site, barcode))
+            """, (loc_name, site, barcode_val))
             imported_count += 1
 
     conn.commit()
@@ -450,7 +465,11 @@ elif current_page == 'Stock':
                                 "INSERT INTO items (code, name, type, unit_of_measure, storage_location, current_stock, min_stock, cost_price, selling_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                                 (code, name, item_type, um, storage_loc, current_stock, min_stock, cost, selling_price)
                             )
-                            cursor.execute("INSERT OR IGNORE INTO storage_locations (name) VALUES (?)", (storage_loc,))
+                            # Generare Barcode pentru noua locație
+                            cursor.execute("SELECT id FROM storage_locations WHERE name = ?", (storage_loc,))
+                            if not cursor.fetchone():
+                                auto_bc = generate_storage_barcode(conn, storage_loc)
+                                cursor.execute("INSERT INTO storage_locations (name, site, barcode) VALUES (?, ?, ?)", (storage_loc, 'Main site', auto_bc))
                             conn.commit()
                             st.success(f"Articolul {code} salvat!")
                             st.rerun()
@@ -592,7 +611,6 @@ elif current_page == 'Stock':
                 </div>
                 """, unsafe_allow_html=True)
 
-                # Preluare conversii existente pentru editare directă (Poza 16)
                 df_convs = pd.read_sql_query("SELECT id, target_uom, rate FROM unit_conversions WHERE uom_id = ?", conn, params=[u_id])
                 
                 with st.form("uom_conversions_form"):
@@ -623,14 +641,12 @@ elif current_page == 'Stock':
 
                 if submit_conversions:
                     cursor = conn.cursor()
-                    # Salvare editări și ștergeri
                     for item in edited_data:
                         if item['delete']:
                             cursor.execute("DELETE FROM unit_conversions WHERE id = ?", (item['id'],))
                         else:
                             cursor.execute("UPDATE unit_conversions SET target_uom = ?, rate = ? WHERE id = ?", (item['target'], item['rate'], item['id']))
                     
-                    # Salvare conversie nouă
                     if new_target and new_target.strip():
                         cursor.execute("INSERT INTO unit_conversions (uom_id, target_uom, rate) VALUES (?, ?, ?)", (u_id, new_target.strip(), new_rate))
 
@@ -696,7 +712,7 @@ elif current_page == 'Stock':
                     df_g = pd.read_sql_query(q_g, conn, params=p_g)
                     st.dataframe(df_g, use_container_width=True, hide_index=True)
 
-                # 2. UNITS OF MEASUREMENT (POZA 14 - TABEL COMPACT)
+                # 2. UNITS OF MEASUREMENT
                 elif current_setting == "Units_of_measurement":
                     c_title, c_btn = st.columns([8, 2])
                     with c_title:
@@ -755,7 +771,7 @@ elif current_page == 'Stock':
                     calc_height = max(180, len(df_u) * 35 + 40)
                     components.html(iframe_uom_html, height=calc_height, scrolling=True)
 
-                # 3. STORAGE LOCATIONS
+                # 3. STORAGE LOCATIONS (GENERARE AUTOMATĂ DE BARCODE)
                 elif current_setting == "Storage_locations":
                     c_title, c_btn1, c_btn2, c_btn3 = st.columns([5, 2, 1.5, 2])
                     with c_title:
@@ -766,10 +782,13 @@ elif current_page == 'Stock':
                             with st.form("add_loc_form"):
                                 l_name = st.text_input("Storage location")
                                 l_site = st.text_input("Site", "Main site")
-                                l_code = st.text_input("Barcode")
+                                custom_barcode = st.text_input("Barcode (Lăsați gol pentru generare automată)", "")
+                                
                                 if st.form_submit_button("Save"):
-                                    conn.cursor().execute("INSERT OR IGNORE INTO storage_locations (name, site, barcode) VALUES (?, ?, ?)", (l_name, l_site, l_code))
+                                    final_bc = custom_barcode.strip() if custom_barcode.strip() else generate_storage_barcode(conn, l_name)
+                                    conn.cursor().execute("INSERT OR IGNORE INTO storage_locations (name, site, barcode) VALUES (?, ?, ?)", (l_name, l_site, final_bc))
                                     conn.commit()
+                                    st.success(f"Locația {l_name} creată cu Barcode: {final_bc}")
                                     st.rerun()
 
                     with c_btn2:
@@ -789,7 +808,7 @@ elif current_page == 'Stock':
                                         a, u = process_storage_locations_csv(df_loc_up)
                                         st.success(f"Import finalizat! Adăugate: {a}, Actualizate: {u}.")
                                         st.rerun()
-                                except Exception as e:
+                                meț Except Exception as e:
                                     st.error(f"Eroare: {e}")
 
                     l_search = st.text_input("Search Storage location", "", placeholder="Search...")
