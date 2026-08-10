@@ -3,6 +3,7 @@ import sqlite3
 import pandas as pd
 import os
 from datetime import datetime
+import streamlit.components.v1 as components
 
 # 1. Configurare Pagină
 st.set_page_config(page_title="CAN Prod System", layout="wide", initial_sidebar_state="collapsed")
@@ -179,39 +180,6 @@ st.markdown("""
         text-decoration: none;
         padding: 8px 12px;
         border-radius: 4px;
-    }
-
-    /* Tabela Compacta MRPeasy (Poza 14) */
-    .mrp-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        font-size: 13px;
-        background-color: #ffffff;
-    }
-    .mrp-table th {
-        background-color: #e2e8f0;
-        color: #475569;
-        font-weight: 600;
-        padding: 8px 12px;
-        text-align: left;
-        border-bottom: 1px solid #cbd5e1;
-    }
-    .mrp-table td {
-        padding: 8px 12px;
-        border-bottom: 1px solid #f1f5f9;
-        color: #1e293b;
-    }
-    .mrp-table tr:hover {
-        background-color: #f8fafc;
-    }
-    .mrp-edit-link {
-        color: #64748b;
-        text-decoration: none;
-        font-size: 14px;
-    }
-    .mrp-edit-link:hover {
-        color: #2563eb;
     }
 
     .mrp-launchpad {
@@ -677,7 +645,7 @@ elif current_page == 'Stock':
 
             with col_set_content:
                 
-                # 1. PRODUCT GROUPS (POZA 13)
+                # 1. PRODUCT GROUPS
                 if current_setting == "Product_groups":
                     c_title, c_btn = st.columns([8, 2])
                     with c_title:
@@ -702,7 +670,7 @@ elif current_page == 'Stock':
                     df_g = pd.read_sql_query(q_g, conn, params=p_g)
                     st.dataframe(df_g, use_container_width=True, hide_index=True)
 
-                # 2. UNITS OF MEASUREMENT (REPLICAT EXACT POZA 14 - CORECTAT HTML)
+                # 2. UNITS OF MEASUREMENT (RANDARE PERFECTA CU COMPONENTS.HTML)
                 elif current_setting == "Units_of_measurement":
                     c_title, c_btn = st.columns([8, 2])
                     with c_title:
@@ -718,32 +686,48 @@ elif current_page == 'Stock':
 
                     df_u = pd.read_sql_query("SELECT id, name FROM units_of_measurement ORDER BY name", conn)
 
-                    # Tabel HTML pur compact (100% identic Poza 14 - CU UNSAFE_ALLOW_HTML=TRUE)
                     rows_html = ""
                     for _, r in df_u.iterrows():
                         rows_html += f"""
                         <tr>
                             <td>{r['name']}</td>
                             <td style="text-align: right;">
-                                <a href="?page=Stock&subtab=Stock_settings&setting=Units_of_measurement&uom_id={r['id']}" target="_self" class="mrp-edit-link" title="Edit">✏️</a>
+                                <a href="?page=Stock&subtab=Stock_settings&setting=Units_of_measurement&uom_id={r['id']}" target="_top" style="color:#64748b; text-decoration:none; font-size:14px;" title="Edit">✏️</a>
                             </td>
                         </tr>
                         """
 
-                    full_table_html = f"""
-                    <table class="mrp-table">
-                        <thead>
-                            <tr>
-                                <th>Unit of measurement ↑</th>
-                                <th style="text-align: right; width: 60px;">+</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {rows_html}
-                        </tbody>
-                    </table>
+                    iframe_uom_html = f"""
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                    <style>
+                        * {{ box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }}
+                        body {{ background-color: #ffffff; padding: 0; }}
+                        .mrp-table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
+                        .mrp-table th {{ background-color: #e2e8f0; color: #475569; font-weight: 600; padding: 8px 12px; text-align: left; border-bottom: 1px solid #cbd5e1; }}
+                        .mrp-table td {{ padding: 8px 12px; border-bottom: 1px solid #f1f5f9; color: #1e293b; }}
+                        .mrp-table tr:hover {{ background-color: #f8fafc; }}
+                    </style>
+                    </head>
+                    <body>
+                        <table class="mrp-table">
+                            <thead>
+                                <tr>
+                                    <th>Unit of measurement ↑</th>
+                                    <th style="text-align: right; width: 60px;">+</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {rows_html}
+                            </tbody>
+                        </table>
+                    </body>
+                    </html>
                     """
-                    st.markdown(full_table_html, unsafe_allow_html=True)
+                    
+                    calc_height = max(180, len(df_u) * 35 + 40)
+                    components.html(iframe_uom_html, height=calc_height, scrolling=True)
 
                 # 3. STORAGE LOCATIONS
                 elif current_setting == "Storage_locations":
