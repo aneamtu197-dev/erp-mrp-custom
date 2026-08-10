@@ -661,9 +661,7 @@ elif current_page == 'Stock':
             col_set_nav, col_set_content = st.columns([2, 8])
 
             with col_set_nav:
-                title_col, create_col = st.columns([1, 1])
-                with title_col:
-                    st.markdown("### Stock settings")
+                st.markdown("### Stock settings")
                 
                 p_class = "settings-item-active" if current_setting == "Product_groups" else "settings-item"
                 u_class = "settings-item-active" if current_setting == "Units_of_measurement" else "settings-item"
@@ -704,7 +702,7 @@ elif current_page == 'Stock':
                     df_g = pd.read_sql_query(q_g, conn, params=p_g)
                     st.dataframe(df_g, use_container_width=True, hide_index=True)
 
-                # 2. UNITS OF MEASUREMENT (REPLICAT EXACT POZA 14)
+                # 2. UNITS OF MEASUREMENT (REPLICAT EXACT POZA 14 - CORECTAT HTML)
                 elif current_setting == "Units_of_measurement":
                     c_title, c_btn = st.columns([8, 2])
                     with c_title:
@@ -720,8 +718,19 @@ elif current_page == 'Stock':
 
                     df_u = pd.read_sql_query("SELECT id, name FROM units_of_measurement ORDER BY name", conn)
 
-                    # Tabel HTML pur compact (100% identic Poza 14)
-                    table_html = """
+                    # Tabel HTML pur compact (100% identic Poza 14 - CU UNSAFE_ALLOW_HTML=TRUE)
+                    rows_html = ""
+                    for _, r in df_u.iterrows():
+                        rows_html += f"""
+                        <tr>
+                            <td>{r['name']}</td>
+                            <td style="text-align: right;">
+                                <a href="?page=Stock&subtab=Stock_settings&setting=Units_of_measurement&uom_id={r['id']}" target="_self" class="mrp-edit-link" title="Edit">✏️</a>
+                            </td>
+                        </tr>
+                        """
+
+                    full_table_html = f"""
                     <table class="mrp-table">
                         <thead>
                             <tr>
@@ -730,20 +739,11 @@ elif current_page == 'Stock':
                             </tr>
                         </thead>
                         <tbody>
+                            {rows_html}
+                        </tbody>
+                    </table>
                     """
-                    for _, r in df_u.iterrows():
-                        u_id_val = r['id']
-                        u_name_val = r['name']
-                        table_html += f"""
-                            <tr>
-                                <td>{u_name_val}</td>
-                                <td style="text-align: right;">
-                                    <a href="?page=Stock&subtab=Stock_settings&setting=Units_of_measurement&uom_id={u_id_val}" target="_self" class="mrp-edit-link" title="Edit">✏️</a>
-                                </td>
-                            </tr>
-                        """
-                    table_html += "</tbody></table>"
-                    st.markdown(table_html, unsafe_allow_html=True)
+                    st.markdown(full_table_html, unsafe_allow_html=True)
 
                 # 3. STORAGE LOCATIONS
                 elif current_setting == "Storage_locations":
