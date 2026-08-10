@@ -31,31 +31,111 @@ init_and_repair_db()
 def get_connection():
     return sqlite3.connect('erp_database.db')
 
-# 3. Navigare prin Query Params (Funcționează 100% instant la click)
+# 3. Preluare Pagină din URL
 query_params = st.query_params
 current_page = query_params.get("page", "Home")
 
-# Top Bar
-now_str = datetime.now().strftime("%d/%m/%Y %H:%M")
-st.markdown(f"""
+# 4. CSS CUSTOM DE FORȚARE DESIGN IDENTIC POZA 1 (CU CONTUR ȘI TEXT EVIDENT)
+st.markdown("""
 <style>
-    .stApp {{ background-color: #f8fafc; }}
-    [data-testid="stSidebar"] {{ display: none; }}
-    .top-bar {{
+    .stApp { background-color: #f8fafc; }
+    [data-testid="stSidebar"] { display: none; }
+
+    /* Top Bar */
+    .top-bar {
         display: flex;
         justify-content: space-between;
         align-items: center;
         padding: 8px 25px;
         background-color: #ffffff;
         border-bottom: 1px solid #e2e8f0;
-        margin-bottom: 20px;
-        font-family: Arial, sans-serif;
-    }}
-    .top-bar-left {{ display: flex; align-items: center; gap: 12px; }}
-    .logo-text {{ font-size: 20px; font-weight: 800; color: #2563eb; }}
-    .top-info {{ font-size: 11px; color: #94a3b8; }}
-    .top-bar-right {{ display: flex; align-items: center; gap: 18px; font-size: 13px; color: #475569; font-weight: 600; }}
+        margin-bottom: 25px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .top-bar-left { display: flex; align-items: center; gap: 12px; }
+    .logo-text { font-size: 20px; font-weight: 800; color: #2563eb; }
+    .top-info { font-size: 11px; color: #94a3b8; }
+    .top-bar-right { display: flex; align-items: center; gap: 18px; font-size: 13px; color: #475569; font-weight: 600; }
+
+    /* Anulare marcaje implicite Streamlit din interiorul coloanelor */
+    div[data-testid="stMarkdownContainer"] p {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+    }
+
+    /* Forțare 8 coloane strict egale */
+    div[data-testid="stHorizontalBlock"] {
+        gap: 12px !important;
+    }
+    div[data-testid="stHorizontalBlock"] > div {
+        flex: 1 1 0% !important;
+        min-width: 0px !important;
+    }
+
+    /* CARDUL ALBASTRU STILIZAT PERFECT */
+    .mrp-card {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        background-color: #2563eb !important;
+        border: 2px solid #1d4ed8 !important; /* Contur albastru închis */
+        border-radius: 6px !important;
+        height: 140px !important;
+        width: 100% !important;
+        text-decoration: none !important;
+        padding: 10px 4px !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+        transition: all 0.15s ease-in-out !important;
+        box-sizing: border-box !important;
+    }
+
+    .mrp-card-alt {
+        background-color: #3b82f6 !important;
+        border-color: #2563eb !important;
+    }
+
+    .mrp-card:hover {
+        background-color: #1d4ed8 !important;
+        border-color: #1e40af !important; /* Contur și mai închis la hover */
+        transform: translateY(-2px) !important;
+        box-shadow: 0 8px 15px -3px rgba(37, 99, 235, 0.35) !important;
+    }
+
+    /* CERCUL ALB PENTRU PICTOGRAMĂ */
+    .mrp-circle {
+        width: 50px !important;
+        height: 50px !important;
+        min-width: 50px !important;
+        min-height: 50px !important;
+        background-color: #ffffff !important;
+        border-radius: 50% !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-size: 23px !important;
+        margin-bottom: 10px !important;
+        border: 1px solid #cbd5e1 !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.08) !important;
+    }
+
+    /* TEXT ALB, EVIDENT, ÎNGROȘAT */
+    .mrp-title {
+        color: #ffffff !important;
+        font-size: 13px !important;
+        font-weight: 800 !important; /* Font îngroșat */
+        text-align: center !important;
+        line-height: 1.2 !important;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.4) !important; /* Contrast maxim */
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    }
 </style>
+""", unsafe_allow_html=True)
+
+# Top Bar
+now_str = datetime.now().strftime("%d/%m/%Y %H:%M")
+st.markdown(f"""
 <div class="top-bar">
     <div class="top-bar-left">
         <span class="logo-text">CAN Prod System</span>
@@ -127,105 +207,42 @@ def process_mrpeasy_csv(df):
     return imported_count, updated_count
 
 
-# 4. ECRAN PRINCIPAL (NATIVE BUTTONS CU DESIGN PERFECT MRPEASY)
+# 5. ECRAN PRINCIPAL
 if current_page == 'Home':
     
-    # CSS de forțare cercuri albe și pătrate albastre pe st.link_button
-    st.markdown("""
-    <style>
-        /* Grila cu 8 coloane de dimensiuni identice */
-        div[data-testid="stHorizontalBlock"] {
-            gap: 12px !important;
-        }
-        div[data-testid="stHorizontalBlock"] > div {
-            flex: 1 1 0% !important;
-            min-width: 0px !important;
-        }
-
-        /* Cardul Albastru */
-        a[data-testid="stHeaderActionElements"], .mrp-tile {
-            display: flex !important;
-            flex-direction: column !important;
-            align-items: center !important;
-            justify-content: center !important;
-            background-color: #2563eb !important;
-            height: 140px !important;
-            border-radius: 4px !important;
-            text-decoration: none !important;
-            padding: 10px !important;
-            transition: all 0.15s ease-in-out !important;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.08) !important;
-        }
-
-        .mrp-tile-alt {
-            background-color: #3b82f6 !important;
-        }
-
-        .mrp-tile:hover {
-            background-color: #1d4ed8 !important;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 12px rgba(37, 99, 235, 0.25) !important;
-        }
-
-        /* Cercul Alb din Mijloc */
-        .mrp-circle {
-            width: 50px;
-            height: 50px;
-            background-color: #ffffff;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 22px;
-            margin-bottom: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        /* Titlul Alb Sub Cerc */
-        .mrp-label {
-            color: #ffffff;
-            font-size: 12px;
-            font-weight: 700;
-            text-align: center;
-            line-height: 1.2;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        }
-    </style>
-    """, unsafe_allow_html=True)
-
-    # Rândul 1 (8 Card-uri)
+    # Rândul 1 (8 Carduri)
     col1, col2, col3, col4, col5, col6, col7, col8 = st.columns(8)
     
     with col1:
-        st.markdown('<a href="?page=Dashboard" target="_self" class="mrp-tile"><div class="mrp-circle">⏱️</div><div class="mrp-label">Dashboard</div></a>', unsafe_allow_html=True)
+        st.markdown('<a href="?page=Dashboard" target="_self" class="mrp-card"><div class="mrp-circle">⏱️</div><div class="mrp-title">Dashboard</div></a>', unsafe_allow_html=True)
     with col2:
-        st.markdown('<a href="?page=CRM" target="_self" class="mrp-tile"><div class="mrp-circle">📊</div><div class="mrp-label">CRM</div></a>', unsafe_allow_html=True)
+        st.markdown('<a href="?page=CRM" target="_self" class="mrp-card"><div class="mrp-circle">📊</div><div class="mrp-title">CRM</div></a>', unsafe_allow_html=True)
     with col3:
-        st.markdown('<a href="?page=My_Production_Plan" target="_self" class="mrp-tile"><div class="mrp-circle">📅</div><div class="mrp-label">My Production Plan</div></a>', unsafe_allow_html=True)
+        st.markdown('<a href="?page=My_Production_Plan" target="_self" class="mrp-card"><div class="mrp-circle">📅</div><div class="mrp-title">My Production Plan</div></a>', unsafe_allow_html=True)
     with col4:
-        st.markdown('<a href="?page=Production_Planning" target="_self" class="mrp-tile"><div class="mrp-circle">📑</div><div class="mrp-label">Production Planning</div></a>', unsafe_allow_html=True)
+        st.markdown('<a href="?page=Production_Planning" target="_self" class="mrp-card"><div class="mrp-circle">📑</div><div class="mrp-title">Production Planning</div></a>', unsafe_allow_html=True)
     with col5:
-        st.markdown('<a href="?page=Stock" target="_self" class="mrp-tile"><div class="mrp-circle">📦</div><div class="mrp-label">Stock</div></a>', unsafe_allow_html=True)
+        st.markdown('<a href="?page=Stock" target="_self" class="mrp-card"><div class="mrp-circle">📦</div><div class="mrp-title">Stock</div></a>', unsafe_allow_html=True)
     with col6:
-        st.markdown('<a href="?page=Procurement" target="_self" class="mrp-tile"><div class="mrp-circle">🛒</div><div class="mrp-label">Procurement</div></a>', unsafe_allow_html=True)
+        st.markdown('<a href="?page=Procurement" target="_self" class="mrp-card"><div class="mrp-circle">🛒</div><div class="mrp-title">Procurement</div></a>', unsafe_allow_html=True)
     with col7:
-        st.markdown('<a href="?page=Accounting" target="_self" class="mrp-tile"><div class="mrp-circle">📁</div><div class="mrp-label">Accounting</div></a>', unsafe_allow_html=True)
+        st.markdown('<a href="?page=Accounting" target="_self" class="mrp-card"><div class="mrp-circle">📁</div><div class="mrp-title">Accounting</div></a>', unsafe_allow_html=True)
     with col8:
-        st.markdown('<a href="?page=Settings" target="_self" class="mrp-tile mrp-tile-alt"><div class="mrp-circle">⚙️</div><div class="mrp-label">Settings</div></a>', unsafe_allow_html=True)
+        st.markdown('<a href="?page=Settings" target="_self" class="mrp-card mrp-card-alt"><div class="mrp-circle">⚙️</div><div class="mrp-title">Settings</div></a>', unsafe_allow_html=True)
 
-    st.write("") # Spațiu
+    st.write("") # Spațiu între rânduri
     
-    # Rândul 2 (3 Card-uri)
+    # Rândul 2 (3 Carduri)
     col_a, col_b, col_c, col_d, col_e, col_f, col_g, col_h = st.columns(8)
     
     with col_a:
-        st.markdown('<a href="?page=Demo" target="_self" class="mrp-tile"><div class="mrp-circle">🖥️</div><div class="mrp-label">Demo Data and Videos</div></a>', unsafe_allow_html=True)
+        st.markdown('<a href="?page=Demo" target="_self" class="mrp-card"><div class="mrp-circle">🖥️</div><div class="mrp-title">Demo Data and Videos</div></a>', unsafe_allow_html=True)
     with col_b:
-        st.markdown('<a href="?page=Free_Use" target="_self" class="mrp-tile"><div class="mrp-circle">🎁</div><div class="mrp-label">Free Use</div></a>', unsafe_allow_html=True)
+        st.markdown('<a href="?page=Free_Use" target="_self" class="mrp-card"><div class="mrp-circle">🎁</div><div class="mrp-title">Free Use</div></a>', unsafe_allow_html=True)
     with col_c:
-        st.markdown('<a href="?page=Support" target="_self" class="mrp-tile"><div class="mrp-circle">❓</div><div class="mrp-label">Support</div></a>', unsafe_allow_html=True)
+        st.markdown('<a href="?page=Support" target="_self" class="mrp-card"><div class="mrp-circle">❓</div><div class="mrp-title">Support</div></a>', unsafe_allow_html=True)
 
-# 5. ECRAN MODUL STOCK
+# 6. ECRAN MODUL STOCK
 elif current_page == 'Stock':
     col_back, col_title = st.columns([1, 6])
     with col_back:
@@ -315,7 +332,7 @@ elif current_page == 'Stock':
     st.write("### Lista Articolelor din Stoc")
     st.dataframe(df_items, use_container_width=True, height=450)
 
-# 6. ALTE MODULE
+# 7. ALTE MODULE
 else:
     col_back, col_title = st.columns([1, 6])
     with col_back:
