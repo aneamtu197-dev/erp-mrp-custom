@@ -3,12 +3,11 @@ import sqlite3
 import pandas as pd
 import os
 from datetime import datetime
-import streamlit.components.v1 as components
 
-# Configurare Pagină
+# 1. Configurare Pagină
 st.set_page_config(page_title="CAN Prod System", layout="wide", initial_sidebar_state="collapsed")
 
-# Reparare și Inițializare Bază de Date
+# 2. Reparare și Inițializare Bază de Date
 def init_and_repair_db():
     conn = sqlite3.connect('erp_database.db')
     cursor = conn.cursor()
@@ -32,16 +31,17 @@ init_and_repair_db()
 def get_connection():
     return sqlite3.connect('erp_database.db')
 
-# Preluare Pagină din URL
+# 3. Navigare prin Query Params (Funcționează 100% instant la click)
 query_params = st.query_params
 current_page = query_params.get("page", "Home")
 
-# Stiluri globale
-st.markdown("""
+# Top Bar
+now_str = datetime.now().strftime("%d/%m/%Y %H:%M")
+st.markdown(f"""
 <style>
-    .stApp { background-color: #f8fafc; }
-    [data-testid="stSidebar"] { display: none; }
-    .top-bar {
+    .stApp {{ background-color: #f8fafc; }}
+    [data-testid="stSidebar"] {{ display: none; }}
+    .top-bar {{
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -50,17 +50,12 @@ st.markdown("""
         border-bottom: 1px solid #e2e8f0;
         margin-bottom: 20px;
         font-family: Arial, sans-serif;
-    }
-    .top-bar-left { display: flex; align-items: center; gap: 12px; }
-    .logo-text { font-size: 20px; font-weight: 800; color: #2563eb; }
-    .top-info { font-size: 11px; color: #94a3b8; }
-    .top-bar-right { display: flex; align-items: center; gap: 18px; font-size: 13px; color: #475569; font-weight: 600; }
+    }}
+    .top-bar-left {{ display: flex; align-items: center; gap: 12px; }}
+    .logo-text {{ font-size: 20px; font-weight: 800; color: #2563eb; }}
+    .top-info {{ font-size: 11px; color: #94a3b8; }}
+    .top-bar-right {{ display: flex; align-items: center; gap: 18px; font-size: 13px; color: #475569; font-weight: 600; }}
 </style>
-""", unsafe_allow_html=True)
-
-# Top Bar
-now_str = datetime.now().strftime("%d/%m/%Y %H:%M")
-st.markdown(f"""
 <div class="top-bar">
     <div class="top-bar-left">
         <span class="logo-text">CAN Prod System</span>
@@ -132,139 +127,109 @@ def process_mrpeasy_csv(df):
     return imported_count, updated_count
 
 
-# ECRAN PRINCIPAL (HTML EXACT CA ÎN POZĂ)
+# 4. ECRAN PRINCIPAL (NATIVE BUTTONS CU DESIGN PERFECT MRPEASY)
 if current_page == 'Home':
     
-    html_launchpad = """
-    <!DOCTYPE html>
-    <html>
-    <head>
+    # CSS de forțare cercuri albe și pătrate albastre pe st.link_button
+    st.markdown("""
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        body { background-color: #f8fafc; padding: 10px 20px; }
-        
-        .grid-row {
-            display: grid;
-            grid-template-columns: repeat(8, 1fr);
-            gap: 12px;
-            margin-bottom: 12px;
+        /* Grila cu 8 coloane de dimensiuni identice */
+        div[data-testid="stHorizontalBlock"] {
+            gap: 12px !important;
+        }
+        div[data-testid="stHorizontalBlock"] > div {
+            flex: 1 1 0% !important;
+            min-width: 0px !important;
         }
 
-        .tile {
-            background-color: #2563eb;
-            height: 140px;
-            border-radius: 4px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-decoration: none;
-            padding: 10px;
-            transition: all 0.15s ease-in-out;
-            cursor: pointer;
-            border: none;
-            width: 100%;
+        /* Cardul Albastru */
+        a[data-testid="stHeaderActionElements"], .mrp-tile {
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+            background-color: #2563eb !important;
+            height: 140px !important;
+            border-radius: 4px !important;
+            text-decoration: none !important;
+            padding: 10px !important;
+            transition: all 0.15s ease-in-out !important;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08) !important;
         }
 
-        .tile-alt {
-            background-color: #3b82f6;
+        .mrp-tile-alt {
+            background-color: #3b82f6 !important;
         }
 
-        .tile:hover {
-            background-color: #1d4ed8;
+        .mrp-tile:hover {
+            background-color: #1d4ed8 !important;
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+            box-shadow: 0 6px 12px rgba(37, 99, 235, 0.25) !important;
         }
 
-        .icon-circle {
-            width: 52px;
-            height: 52px;
+        /* Cercul Alb din Mijloc */
+        .mrp-circle {
+            width: 50px;
+            height: 50px;
             background-color: #ffffff;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 24px;
-            margin-bottom: 12px;
+            font-size: 22px;
+            margin-bottom: 10px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
-        .tile-title {
+        /* Titlul Alb Sub Cerc */
+        .mrp-label {
             color: #ffffff;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 700;
             text-align: center;
             line-height: 1.2;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         }
     </style>
-    <script>
-        function goTo(page) {
-            window.top.location.href = window.top.location.pathname + "?page=" + page;
-        }
-    </script>
-    </head>
-    <body>
+    """, unsafe_allow_html=True)
 
-    <div class="grid-row">
-        <button onclick="goTo('Dashboard')" class="tile">
-            <div class="icon-circle">⏱️</div>
-            <div class="tile-title">Dashboard</div>
-        </button>
-        <button onclick="goTo('CRM')" class="tile">
-            <div class="icon-circle">📊</div>
-            <div class="tile-title">CRM</div>
-        </button>
-        <button onclick="goTo('My_Production_Plan')" class="tile">
-            <div class="icon-circle">📅</div>
-            <div class="tile-title">My Production Plan</div>
-        </button>
-        <button onclick="goTo('Production_Planning')" class="tile">
-            <div class="icon-circle">📑</div>
-            <div class="tile-title">Production Planning</div>
-        </button>
-        <button onclick="goTo('Stock')" class="tile">
-            <div class="icon-circle">📦</div>
-            <div class="tile-title">Stock</div>
-        </button>
-        <button onclick="goTo('Procurement')" class="tile">
-            <div class="icon-circle">🛒</div>
-            <div class="tile-title">Procurement</div>
-        </button>
-        <button onclick="goTo('Accounting')" class="tile">
-            <div class="icon-circle">📁</div>
-            <div class="tile-title">Accounting</div>
-        </button>
-        <button onclick="goTo('Settings')" class="tile tile-alt">
-            <div class="icon-circle">⚙️</div>
-            <div class="tile-title">Settings</div>
-        </button>
-    </div>
+    # Rândul 1 (8 Card-uri)
+    col1, col2, col3, col4, col5, col6, col7, col8 = st.columns(8)
+    
+    with col1:
+        st.markdown('<a href="?page=Dashboard" target="_self" class="mrp-tile"><div class="mrp-circle">⏱️</div><div class="mrp-label">Dashboard</div></a>', unsafe_allow_html=True)
+    with col2:
+        st.markdown('<a href="?page=CRM" target="_self" class="mrp-tile"><div class="mrp-circle">📊</div><div class="mrp-label">CRM</div></a>', unsafe_allow_html=True)
+    with col3:
+        st.markdown('<a href="?page=My_Production_Plan" target="_self" class="mrp-tile"><div class="mrp-circle">📅</div><div class="mrp-label">My Production Plan</div></a>', unsafe_allow_html=True)
+    with col4:
+        st.markdown('<a href="?page=Production_Planning" target="_self" class="mrp-tile"><div class="mrp-circle">📑</div><div class="mrp-label">Production Planning</div></a>', unsafe_allow_html=True)
+    with col5:
+        st.markdown('<a href="?page=Stock" target="_self" class="mrp-tile"><div class="mrp-circle">📦</div><div class="mrp-label">Stock</div></a>', unsafe_allow_html=True)
+    with col6:
+        st.markdown('<a href="?page=Procurement" target="_self" class="mrp-tile"><div class="mrp-circle">🛒</div><div class="mrp-label">Procurement</div></a>', unsafe_allow_html=True)
+    with col7:
+        st.markdown('<a href="?page=Accounting" target="_self" class="mrp-tile"><div class="mrp-circle">📁</div><div class="mrp-label">Accounting</div></a>', unsafe_allow_html=True)
+    with col8:
+        st.markdown('<a href="?page=Settings" target="_self" class="mrp-tile mrp-tile-alt"><div class="mrp-circle">⚙️</div><div class="mrp-label">Settings</div></a>', unsafe_allow_html=True)
 
-    <div class="grid-row">
-        <button onclick="goTo('Demo')" class="tile">
-            <div class="icon-circle">🖥️</div>
-            <div class="tile-title">Demo Data and Videos</div>
-        </button>
-        <button onclick="goTo('Free_Use')" class="tile">
-            <div class="icon-circle">🎁</div>
-            <div class="tile-title">Free Use</div>
-        </button>
-        <button onclick="goTo('Support')" class="tile">
-            <div class="icon-circle">❓</div>
-            <div class="tile-title">Support</div>
-        </button>
-    </div>
+    st.write("") # Spațiu
+    
+    # Rândul 2 (3 Card-uri)
+    col_a, col_b, col_c, col_d, col_e, col_f, col_g, col_h = st.columns(8)
+    
+    with col_a:
+        st.markdown('<a href="?page=Demo" target="_self" class="mrp-tile"><div class="mrp-circle">🖥️</div><div class="mrp-label">Demo Data and Videos</div></a>', unsafe_allow_html=True)
+    with col_b:
+        st.markdown('<a href="?page=Free_Use" target="_self" class="mrp-tile"><div class="mrp-circle">🎁</div><div class="mrp-label">Free Use</div></a>', unsafe_allow_html=True)
+    with col_c:
+        st.markdown('<a href="?page=Support" target="_self" class="mrp-tile"><div class="mrp-circle">❓</div><div class="mrp-label">Support</div></a>', unsafe_allow_html=True)
 
-    </body>
-    </html>
-    """
-    components.html(html_launchpad, height=340)
-
-# ECRAN MODUL STOCK
+# 5. ECRAN MODUL STOCK
 elif current_page == 'Stock':
     col_back, col_title = st.columns([1, 6])
     with col_back:
-        st.markdown('<a href="?page=Home" target="_top" style="text-decoration:none;"><button style="height:38px; background-color:#475569; color:white; border:none; border-radius:4px; padding:0 15px; cursor:pointer; font-weight:bold;">⬅️ Main Menu</button></a>', unsafe_allow_html=True)
+        st.markdown('<a href="?page=Home" target="_self" style="text-decoration:none;"><button style="height:38px; background-color:#475569; color:white; border:none; border-radius:4px; padding:0 15px; cursor:pointer; font-weight:bold;">⬅️ Main Menu</button></a>', unsafe_allow_html=True)
     with col_title:
         st.title("📦 Stock & Inventory Management")
 
@@ -350,11 +315,11 @@ elif current_page == 'Stock':
     st.write("### Lista Articolelor din Stoc")
     st.dataframe(df_items, use_container_width=True, height=450)
 
-# ALTE MODULE
+# 6. ALTE MODULE
 else:
     col_back, col_title = st.columns([1, 6])
     with col_back:
-        st.markdown('<a href="?page=Home" target="_top" style="text-decoration:none;"><button style="height:38px; background-color:#475569; color:white; border:none; border-radius:4px; padding:0 15px; cursor:pointer; font-weight:bold;">⬅️ Main Menu</button></a>', unsafe_allow_html=True)
+        st.markdown('<a href="?page=Home" target="_self" style="text-decoration:none;"><button style="height:38px; background-color:#475569; color:white; border:none; border-radius:4px; padding:0 15px; cursor:pointer; font-weight:bold;">⬅️ Main Menu</button></a>', unsafe_allow_html=True)
     with col_title:
         st.title(f"Modul: {current_page.replace('_', ' ')}")
     st.divider()
