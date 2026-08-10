@@ -3,11 +3,12 @@ import sqlite3
 import pandas as pd
 import os
 from datetime import datetime
+import streamlit.components.v1 as components
 
-# 1. Configurare Pagină
+# Configurare Pagină
 st.set_page_config(page_title="CAN Prod System", layout="wide", initial_sidebar_state="collapsed")
 
-# 2. Reparare și Inițializare Bază de Date
+# Reparare și Inițializare Bază de Date
 def init_and_repair_db():
     conn = sqlite3.connect('erp_database.db')
     cursor = conn.cursor()
@@ -31,20 +32,15 @@ init_and_repair_db()
 def get_connection():
     return sqlite3.connect('erp_database.db')
 
-# 3. Navigare Session State
-if 'current_page' not in st.session_state:
-    st.session_state['current_page'] = 'Home'
+# Preluare Pagină din URL
+query_params = st.query_params
+current_page = query_params.get("page", "Home")
 
-def set_page(page_name):
-    st.session_state['current_page'] = page_name
-
-# 4. CSS DE FORȚARE DIMENSIUNI EGALE (STIL MRPEASY LAUNCHPAD)
+# Stiluri globale
 st.markdown("""
 <style>
     .stApp { background-color: #f8fafc; }
     [data-testid="stSidebar"] { display: none; }
-
-    /* Top Bar */
     .top-bar {
         display: flex;
         justify-content: space-between;
@@ -52,53 +48,13 @@ st.markdown("""
         padding: 8px 25px;
         background-color: #ffffff;
         border-bottom: 1px solid #e2e8f0;
-        margin-bottom: 25px;
+        margin-bottom: 20px;
         font-family: Arial, sans-serif;
     }
     .top-bar-left { display: flex; align-items: center; gap: 12px; }
     .logo-text { font-size: 20px; font-weight: 800; color: #2563eb; }
     .top-info { font-size: 11px; color: #94a3b8; }
     .top-bar-right { display: flex; align-items: center; gap: 18px; font-size: 13px; color: #475569; font-weight: 600; }
-
-    /* FORȚARE STRUCTURĂ GRILĂ 8 COLOANE EGALE */
-    div[data-testid="stHorizontalBlock"] > div {
-        flex: 1 1 0% !important;
-        min-width: 0px !important;
-    }
-
-    /* CARDURI ALBASTRE PĂTRATE STRICT EGALE */
-    div[data-testid="stHorizontalBlock"] button {
-        width: 100% !important;
-        height: 130px !important;
-        min-height: 130px !important;
-        max-height: 130px !important;
-        background-color: #2563eb !important;
-        border-radius: 6px !important;
-        border: none !important;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08) !important;
-        padding: 5px !important;
-    }
-
-    /* Stilizare text alb interior */
-    div[data-testid="stHorizontalBlock"] button p {
-        color: #ffffff !important;
-        font-size: 12px !important;
-        font-weight: 700 !important;
-        white-space: pre-line !important;
-        text-align: center !important;
-        line-height: 1.3 !important;
-    }
-
-    div[data-testid="stHorizontalBlock"] button:hover {
-        background-color: #1d4ed8 !important;
-        box-shadow: 0 6px 12px rgba(37, 99, 235, 0.3) !important;
-    }
-
-    .back-btn button {
-        height: 38px !important;
-        background-color: #475569 !important;
-        width: auto !important;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -176,70 +132,139 @@ def process_mrpeasy_csv(df):
     return imported_count, updated_count
 
 
-# ECRAN PRINCIPAL
-if st.session_state['current_page'] == 'Home':
+# ECRAN PRINCIPAL (HTML EXACT CA ÎN POZĂ)
+if current_page == 'Home':
     
-    col1, col2, col3, col4, col5, col6, col7, col8 = st.columns(8)
-    
-    with col1:
-        if st.button("⏱️\n\nDashboard", key="btn_dash"):
-            set_page("Dashboard")
-            st.rerun()
-    with col2:
-        if st.button("📊\n\nCRM", key="btn_crm"):
-            set_page("CRM")
-            st.rerun()
-    with col3:
-        if st.button("📅\n\nMy Production Plan", key="btn_my_plan"):
-            set_page("My Production Plan")
-            st.rerun()
-    with col4:
-        if st.button("📑\n\nProduction Planning", key="btn_prod_plan"):
-            set_page("Production Planning")
-            st.rerun()
-    with col5:
-        if st.button("📦\n\nStock", key="btn_stock"):
-            set_page("Stock")
-            st.rerun()
-    with col6:
-        if st.button("🛒\n\nProcurement", key="btn_proc"):
-            set_page("Procurement")
-            st.rerun()
-    with col7:
-        if st.button("📁\n\nAccounting", key="btn_acc"):
-            set_page("Accounting")
-            st.rerun()
-    with col8:
-        if st.button("⚙️\n\nSettings", key="btn_sett"):
-            set_page("Settings")
-            st.rerun()
+    html_launchpad = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background-color: #f8fafc; padding: 10px 20px; }
+        
+        .grid-row {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 12px;
+            margin-bottom: 12px;
+        }
 
-    st.write("")
-    
-    col_a, col_b, col_c, col_d, col_e, col_f, col_g, col_h = st.columns(8)
-    
-    with col_a:
-        if st.button("🖥️\n\nDemo Data", key="btn_demo"):
-            set_page("Demo")
-            st.rerun()
-    with col_b:
-        if st.button("🎁\n\nFree Use", key="btn_free"):
-            set_page("Free Use")
-            st.rerun()
-    with col_c:
-        if st.button("❓\n\nSupport", key="btn_supp"):
-            set_page("Support")
-            st.rerun()
+        .tile {
+            background-color: #2563eb;
+            height: 140px;
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            padding: 10px;
+            transition: all 0.15s ease-in-out;
+            cursor: pointer;
+            border: none;
+            width: 100%;
+        }
 
-# MODUL STOCK
-elif st.session_state['current_page'] == 'Stock':
+        .tile-alt {
+            background-color: #3b82f6;
+        }
+
+        .tile:hover {
+            background-color: #1d4ed8;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+        }
+
+        .icon-circle {
+            width: 52px;
+            height: 52px;
+            background-color: #ffffff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .tile-title {
+            color: #ffffff;
+            font-size: 13px;
+            font-weight: 700;
+            text-align: center;
+            line-height: 1.2;
+        }
+    </style>
+    <script>
+        function goTo(page) {
+            window.top.location.href = window.top.location.pathname + "?page=" + page;
+        }
+    </script>
+    </head>
+    <body>
+
+    <div class="grid-row">
+        <button onclick="goTo('Dashboard')" class="tile">
+            <div class="icon-circle">⏱️</div>
+            <div class="tile-title">Dashboard</div>
+        </button>
+        <button onclick="goTo('CRM')" class="tile">
+            <div class="icon-circle">📊</div>
+            <div class="tile-title">CRM</div>
+        </button>
+        <button onclick="goTo('My_Production_Plan')" class="tile">
+            <div class="icon-circle">📅</div>
+            <div class="tile-title">My Production Plan</div>
+        </button>
+        <button onclick="goTo('Production_Planning')" class="tile">
+            <div class="icon-circle">📑</div>
+            <div class="tile-title">Production Planning</div>
+        </button>
+        <button onclick="goTo('Stock')" class="tile">
+            <div class="icon-circle">📦</div>
+            <div class="tile-title">Stock</div>
+        </button>
+        <button onclick="goTo('Procurement')" class="tile">
+            <div class="icon-circle">🛒</div>
+            <div class="tile-title">Procurement</div>
+        </button>
+        <button onclick="goTo('Accounting')" class="tile">
+            <div class="icon-circle">📁</div>
+            <div class="tile-title">Accounting</div>
+        </button>
+        <button onclick="goTo('Settings')" class="tile tile-alt">
+            <div class="icon-circle">⚙️</div>
+            <div class="tile-title">Settings</div>
+        </button>
+    </div>
+
+    <div class="grid-row">
+        <button onclick="goTo('Demo')" class="tile">
+            <div class="icon-circle">🖥️</div>
+            <div class="tile-title">Demo Data and Videos</div>
+        </button>
+        <button onclick="goTo('Free_Use')" class="tile">
+            <div class="icon-circle">🎁</div>
+            <div class="tile-title">Free Use</div>
+        </button>
+        <button onclick="goTo('Support')" class="tile">
+            <div class="icon-circle">❓</div>
+            <div class="tile-title">Support</div>
+        </button>
+    </div>
+
+    </body>
+    </html>
+    """
+    components.html(html_launchpad, height=340)
+
+# ECRAN MODUL STOCK
+elif current_page == 'Stock':
     col_back, col_title = st.columns([1, 6])
     with col_back:
-        st.markdown('<div class="back-btn">', unsafe_allow_html=True)
-        if st.button("⬅️ Main Menu"):
-            set_page("Home")
-            st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('<a href="?page=Home" target="_top" style="text-decoration:none;"><button style="height:38px; background-color:#475569; color:white; border:none; border-radius:4px; padding:0 15px; cursor:pointer; font-weight:bold;">⬅️ Main Menu</button></a>', unsafe_allow_html=True)
     with col_title:
         st.title("📦 Stock & Inventory Management")
 
@@ -329,14 +354,10 @@ elif st.session_state['current_page'] == 'Stock':
 else:
     col_back, col_title = st.columns([1, 6])
     with col_back:
-        st.markdown('<div class="back-btn">', unsafe_allow_html=True)
-        if st.button("⬅️ Main Menu"):
-            set_page("Home")
-            st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('<a href="?page=Home" target="_top" style="text-decoration:none;"><button style="height:38px; background-color:#475569; color:white; border:none; border-radius:4px; padding:0 15px; cursor:pointer; font-weight:bold;">⬅️ Main Menu</button></a>', unsafe_allow_html=True)
     with col_title:
-        st.title(f"Modul: {st.session_state['current_page']}")
+        st.title(f"Modul: {current_page.replace('_', ' ')}")
     st.divider()
-    st.info(f"Modulul **{st.session_state['current_page']}** este pregătit.")
+    st.info(f"Modulul **{current_page.replace('_', ' ')}** este pregătit.")
 
 conn.close()
