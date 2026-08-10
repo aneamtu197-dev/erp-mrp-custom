@@ -7,7 +7,7 @@ from datetime import datetime
 # 1. Configurare Pagină
 st.set_page_config(page_title="CAN Prod System", layout="wide", initial_sidebar_state="collapsed")
 
-# 2. Reparare și Inițializare Bază de Date
+# 2. Reparare și Inițializare Bază de Date Completa
 def init_and_repair_db():
     conn = sqlite3.connect('erp_database.db')
     cursor = conn.cursor()
@@ -28,33 +28,52 @@ def init_and_repair_db():
     );
     """)
 
-    # Tabela pentru Stock Movements (Istoric mișcări stoc)
+    # Tabela Product Groups (Poza 13)
     cursor.execute("""
-    CREATE TABLE IF NOT EXISTS stock_movements (
+    CREATE TABLE IF NOT EXISTS product_groups (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        item_code VARCHAR(100) NOT NULL,
-        movement_type VARCHAR(50) NOT NULL,
-        quantity REAL NOT NULL,
-        source_location VARCHAR(100),
-        destination_location VARCHAR(100),
-        user VARCHAR(100),
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-        notes TEXT
+        number VARCHAR(50) UNIQUE NOT NULL,
+        name VARCHAR(255) NOT NULL
     );
     """)
 
-    # Tabela pentru Write-offs (Casări)
+    # Tabela Units of Measurement (Poza 14)
     cursor.execute("""
-    CREATE TABLE IF NOT EXISTS write_offs (
+    CREATE TABLE IF NOT EXISTS units_of_measurement (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        item_code VARCHAR(100) NOT NULL,
-        quantity REAL NOT NULL,
-        reason TEXT,
-        user VARCHAR(100),
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        name VARCHAR(50) UNIQUE NOT NULL
     );
     """)
-    
+
+    # Tabela Storage Locations / Clienți (Poza 15)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS storage_locations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name VARCHAR(100) UNIQUE NOT NULL
+    );
+    """)
+
+    # Populare implicită dacă tabelele sunt goale
+    cursor.execute("SELECT COUNT(*) FROM units_of_measurement")
+    if cursor.fetchone()[0] == 0:
+        default_uoms = ['kg', 'l', 'm2', 'Ml', 'Ore', 'pcs', 'SET', 'BUC']
+        for u in default_uoms:
+            cursor.execute("INSERT OR IGNORE INTO units_of_measurement (name) VALUES (?)", (u,))
+
+    cursor.execute("SELECT COUNT(*) FROM product_groups")
+    if cursor.fetchone()[0] == 0:
+        default_groups = [
+            ('1', 'RAW MATERIAL'),
+            ('2', 'PRODUSE FINITE'),
+            ('3', 'BUY PARTS'),
+            ('4', 'Servici'),
+            ('5', 'RFQ'),
+            ('6', 'INOX'),
+            ('7', 'RAW MATERIAL ZINCAT')
+        ]
+        for num, name in default_groups:
+            cursor.execute("INSERT OR IGNORE INTO product_groups (number, name) VALUES (?, ?)", (num, name))
+
     conn.commit()
     conn.close()
 
@@ -63,12 +82,13 @@ init_and_repair_db()
 def get_connection():
     return sqlite3.connect('erp_database.db')
 
-# 3. Preluare Pagină și Sub-tab din URL Query Parameters
+# 3. Preluare Pagină, Subtab și Settings-Tab din URL Query Parameters
 query_params = st.query_params
 current_page = query_params.get("page", "Home")
 current_subtab = query_params.get("subtab", "Items")
+current_setting = query_params.get("setting", "Product_groups")
 
-# 4. CSS STILIZARE REPLICATĂ DUPĂ MRPEASY
+# 4. CSS STILIZARE REPLICATĂ DUPĂ POZELE 12-15
 st.markdown("""
 <style>
     .stApp { background-color: #f8fafc; }
@@ -120,6 +140,33 @@ st.markdown("""
     .mrp-subtab-active { color: #2563eb; border-bottom: 2px solid #2563eb; padding-bottom: 8px; text-decoration: none; }
     .mrp-subtab { color: #64748b; text-decoration: none; }
     .mrp-subtab:hover { color: #1e293b; }
+
+    /* Meniu Lateral Stânga pentru Stock Settings (Poza 12) */
+    .settings-sidebar {
+        background-color: #f1f5f9;
+        border-radius: 4px;
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .settings-item {
+        color: #475569;
+        font-size: 13px;
+        font-weight: 600;
+        text-decoration: none;
+        padding: 8px 12px;
+        border-radius: 4px;
+    }
+    .settings-item-active {
+        background-color: #e2e8f0;
+        color: #2563eb;
+        font-size: 13px;
+        font-weight: 700;
+        text-decoration: none;
+        padding: 8px 12px;
+        border-radius: 4px;
+    }
 
     .mrp-launchpad {
         display: grid;
@@ -192,7 +239,7 @@ st.markdown("""
 
 conn = get_connection()
 
-# Funcție Import MRPeasy CSV
+# Funcție Import Corectat din MRPeasy CSV
 def process_mrpeasy_csv(df):
     cursor = conn.cursor()
     imported_count = 0
@@ -221,6 +268,8 @@ def process_mrpeasy_csv(df):
         loc_raw = row.get('default storage location', row.get('storage location', row.get('location', '-')))
         if pd.notnull(loc_raw) and str(loc_raw).strip() != '' and str(loc_raw).strip().lower() != 'nan':
             storage_loc = str(loc_raw).strip()
+            # Inserare automată a locației/clientului în tabela storage_locations dacă nu există
+            cursor.execute("INSERT OR IGNORE INTO storage_locations (name) VALUES (?)", (storage_loc,))
         else:
             storage_loc = '-'
         
@@ -289,7 +338,7 @@ if current_page == 'Home':
     </div>
     """, unsafe_allow_html=True)
 
-# 6. ECRAN MODUL STOCK (CU SUB-MENIURI DINAMICE ŞI INTERACTIVE)
+# 6. ECRAN MODUL STOCK
 elif current_page == 'Stock':
     
     total_db_items = conn.cursor().execute("SELECT COUNT(*) FROM items").fetchone()[0]
@@ -329,7 +378,7 @@ elif current_page == 'Stock':
                     name = st.text_input("Part description")
                     item_type = st.selectbox("Group", ["RAW_MATERIAL", "SUBASSEMBLY", "FINISHED_GOOD"])
                     um = st.text_input("UoM", "pcs")
-                    storage_loc = st.text_input("Default storage location", "General")
+                    storage_loc = st.text_input("Default storage location (Client)", "General")
                     current_stock = st.number_input("In stock", min_value=0.0, value=0.0)
                     min_stock = st.number_input("Reorder point", min_value=0.0, value=0.0)
                     cost = st.number_input("Cost (€)", min_value=0.0, value=0.0)
@@ -342,6 +391,8 @@ elif current_page == 'Stock':
                                 "INSERT INTO items (code, name, type, unit_of_measure, storage_location, current_stock, min_stock, cost_price, selling_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                                 (code, name, item_type, um, storage_loc, current_stock, min_stock, cost, selling_price)
                             )
+                            # Salvare și în lista de locații/clienți
+                            cursor.execute("INSERT OR IGNORE INTO storage_locations (name) VALUES (?)", (storage_loc,))
                             conn.commit()
                             st.success(f"Articolul {code} salvat!")
                             st.rerun()
@@ -393,7 +444,7 @@ elif current_page == 'Stock':
             f_uom = st.selectbox("UoM", um_options, key="f_uom")
 
         with col_loc:
-            f_location = st.selectbox("Default storage location", loc_options, key="f_loc")
+            f_location = st.selectbox("Default storage location (Client)", loc_options, key="f_loc")
 
         with col_cost:
             f_cost_min = st.number_input("Cost Min (€)", value=0.0, step=1.0, key="f_c_min")
@@ -453,6 +504,101 @@ elif current_page == 'Stock':
         df_items = pd.read_sql_query(query, conn, params=params)
         st.dataframe(df_items, use_container_width=True, height=520, hide_index=True)
 
+    # ------------------ SUBTAB: STOCK SETTINGS (POZELE 12-15) ------------------
+    elif current_subtab == "Stock_settings":
+        
+        col_set_nav, col_set_content = st.columns([2, 8])
+
+        # Meniu stânga (Poza 12)
+        with col_set_nav:
+            st.markdown("### Stock settings")
+            
+            p_class = "settings-item-active" if current_setting == "Product_groups" else "settings-item"
+            u_class = "settings-item-active" if current_setting == "Units_of_measurement" else "settings-item"
+            s_class = "settings-item-active" if current_setting == "Storage_locations" else "settings-item"
+
+            st.markdown(f"""
+            <div class="settings-sidebar">
+                <a href="?page=Stock&subtab=Stock_settings&setting=Product_groups" target="_self" class="{p_class}">Product groups</a>
+                <a href="?page=Stock&subtab=Stock_settings&setting=Units_of_measurement" target="_self" class="{u_class}">Units of measurement</a>
+                <a href="?page=Stock&subtab=Stock_settings&setting=Storage_locations" target="_self" class="{s_class}">Storage locations (Clients)</a>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # Conținut dreapta (Pozele 13, 14, 15)
+        with col_set_content:
+            
+            # --- 1. PRODUCT GROUPS (Poza 13) ---
+            if current_setting == "Product_groups":
+                c_title, c_btn = st.columns([8, 2])
+                with c_title:
+                    st.markdown("#### Product groups")
+                with c_btn:
+                    with st.popover("➕ Create", use_container_width=True):
+                        with st.form("add_group_form"):
+                            g_num = st.text_input("Number")
+                            g_name = st.text_input("Name")
+                            if st.form_submit_button("Save"):
+                                conn.cursor().execute("INSERT INTO product_groups (number, name) VALUES (?, ?)", (g_num, g_name))
+                                conn.commit()
+                                st.rerun()
+
+                # Căutare
+                g_search = st.text_input("Search Number / Name", "", placeholder="Search...")
+                q_g = "SELECT number as Number, name as Name FROM product_groups WHERE 1=1"
+                p_g = []
+                if g_search:
+                    q_g += " AND (number LIKE ? OR name LIKE ?)"
+                    p_g.extend([f"%{g_search}%", f"%{g_search}%"])
+                
+                df_g = pd.read_sql_query(q_g, conn, params=p_g)
+                st.dataframe(df_g, use_container_width=True, hide_index=True)
+
+            # --- 2. UNITS OF MEASUREMENT (Poza 14) ---
+            elif current_setting == "Units_of_measurement":
+                c_title, c_btn = st.columns([8, 2])
+                with c_title:
+                    st.markdown("#### Units of measurement")
+                with c_btn:
+                    with st.popover("➕ Create", use_container_width=True):
+                        with st.form("add_uom_form"):
+                            u_name = st.text_input("Unit of measurement")
+                            if st.form_submit_button("Save"):
+                                conn.cursor().execute("INSERT OR IGNORE INTO units_of_measurement (name) VALUES (?)", (u_name,))
+                                conn.commit()
+                                st.rerun()
+
+                df_u = pd.read_sql_query("SELECT name as 'Unit of measurement' FROM units_of_measurement ORDER BY name", conn)
+                st.dataframe(df_u, use_container_width=True, hide_index=True)
+
+            # --- 3. STORAGE LOCATIONS / CLIENȚI (Poza 15) ---
+            elif current_setting == "Storage_locations":
+                c_title, c_btn1, c_btn2 = st.columns([6, 2, 2])
+                with c_title:
+                    st.markdown("#### Storage locations (Virtual Depozite Clienți)")
+                with c_btn1:
+                    with st.popover("➕ Create Client/Location", use_container_width=True):
+                        with st.form("add_loc_form"):
+                            l_name = st.text_input("Storage location Name (Client Name)")
+                            if st.form_submit_button("Save"):
+                                conn.cursor().execute("INSERT OR IGNORE INTO storage_locations (name) VALUES (?)", (l_name,))
+                                conn.commit()
+                                st.rerun()
+
+                with c_btn2:
+                    df_loc_exp = pd.read_sql_query("SELECT name as 'Storage location' FROM storage_locations ORDER BY name", conn)
+                    st.download_button("↓ CSV Export", data=df_loc_exp.to_csv(index=False), file_name="storage_locations.csv", mime="text/csv", use_container_width=True)
+
+                l_search = st.text_input("Search Location / Client", "", placeholder="Search...")
+                q_l = "SELECT id as ID, name as 'Storage location' FROM storage_locations WHERE 1=1"
+                p_l = []
+                if l_search:
+                    q_l += " AND name LIKE ?"
+                    p_l.append(f"%{l_search}%")
+
+                df_l = pd.read_sql_query(q_l, conn, params=p_l)
+                st.dataframe(df_l, use_container_width=True, hide_index=True)
+
     # ------------------ SUBTAB: CRITICAL ON-HAND ------------------
     elif current_subtab == "Critical_on_hand":
         st.subheader("🔴 Critical On-Hand Stock (Reorder Required)")
@@ -464,27 +610,17 @@ elif current_page == 'Stock':
                 min_stock as 'Reorder point', 
                 (min_stock - current_stock) as 'Shortage Quantity',
                 unit_of_measure as 'UoM', 
-                storage_location as 'Default storage location'
+                storage_location as 'Default storage location (Client)'
             FROM items 
             WHERE current_stock <= min_stock AND min_stock > 0
             ORDER BY (min_stock - current_stock) DESC
         """, conn)
         
         if df_critical.empty:
-            st.success("🟢 Toate produsele au stoc peste limita minimă de siguranță!")
+            st.success("🟢 Toate produsele au stoc peste nivelul minim de reordonare!")
         else:
-            st.warning(f"⚠️ Există {len(df_critical)} articole sub nivelul minim de reordonare:")
+            st.warning(f"⚠️ Există {len(df_critical)} articole sub nivelul minim:")
             st.dataframe(df_critical, use_container_width=True, hide_index=True)
-
-    # ------------------ SUBTAB: STOCK SETTINGS ------------------
-    elif current_subtab == "Stock_settings":
-        st.subheader("⚙️ Stock Settings & Storage Locations")
-        df_locations = pd.read_sql_query("""
-            SELECT storage_location as 'Location Name', COUNT(*) as 'Total Items Stored', SUM(current_stock) as 'Total Units'
-            FROM items 
-            GROUP BY storage_location
-        """, conn)
-        st.dataframe(df_locations, use_container_width=True, hide_index=True)
 
     # ------------------ SUBTAB: STATISTICS ------------------
     elif current_subtab == "Statistics":
