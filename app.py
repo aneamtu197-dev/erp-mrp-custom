@@ -3,74 +3,98 @@ import sqlite3
 import pandas as pd
 import os
 from datetime import datetime
-from init_db import init_database
 
 # Configurare Pagină
 st.set_page_config(page_title="CAN Prod System", layout="wide", initial_sidebar_state="collapsed")
 
-# Inițializare Bază de Date
-if not os.path.exists('erp_database.db'):
-    init_database()
+# Inițializare și Reparare Automată Bază de Date
+def init_and_repair_db():
+    conn = sqlite3.connect('erp_database.db')
+    cursor = conn.cursor()
+
+    # Creare Tabela Items cu Toate Coloanele Necesare
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code VARCHAR(100) UNIQUE NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        type VARCHAR(50) DEFAULT 'RAW_MATERIAL',
+        unit_of_measure VARCHAR(20) DEFAULT 'BUC',
+        current_stock REAL DEFAULT 0.0,
+        min_stock REAL DEFAULT 0.0,
+        cost_price REAL DEFAULT 0.0
+    );
+    """)
+    
+    # Asigurare că există toate coloanele
+    cursor.execute("PRAGMA table_info(items)")
+    columns = [column[1] for column in cursor.fetchall()]
+    
+    if 'current_stock' not in columns:
+        cursor.execute("ALTER TABLE items ADD COLUMN current_stock REAL DEFAULT 0.0;")
+    if 'min_stock' not in columns:
+        cursor.execute("ALTER TABLE items ADD COLUMN min_stock REAL DEFAULT 0.0;")
+    if 'cost_price' not in columns:
+        cursor.execute("ALTER TABLE items ADD COLUMN cost_price REAL DEFAULT 0.0;")
+        
+    conn.commit()
+    conn.close()
+
+init_and_repair_db()
 
 def get_connection():
     return sqlite3.connect('erp_database.db')
 
-# Navigare prin Session State (Funcționează garantat la click)
+# Gestionare Stare Navigare
 if 'current_page' not in st.session_state:
     st.session_state['current_page'] = 'Home'
 
-def navigate_to(page_name):
+def set_page(page_name):
     st.session_state['current_page'] = page_name
 
-# CSS Custom pentru Replicare Exactă a Interfeței MRPeasy
+# CSS Custom - REPARARE DIMENSIUNI EGALE PĂTRATE ALBASTRE
 st.markdown("""
 <style>
-    /* Fundal general gri deschis */
-    .stApp {
-        background-color: #f8fafc;
-    }
-    
-    /* Ascundere Meniu Lateral Streamlit */
+    .stApp { background-color: #f8fafc; }
     [data-testid="stSidebar"] { display: none; }
     
-    /* Top Bar Styling */
+    /* Top Bar */
     .top-bar {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 8px 20px;
+        padding: 8px 25px;
         background-color: #ffffff;
-        border-bottom: 1px solid #e1e6eb;
-        margin-bottom: 20px;
+        border-bottom: 1px solid #e2e8f0;
+        margin-bottom: 25px;
         font-family: Arial, sans-serif;
     }
     .top-bar-left { display: flex; align-items: center; gap: 12px; }
-    .logo-text { font-size: 20px; font-weight: 800; color: #1e62d0; }
+    .logo-text { font-size: 20px; font-weight: 800; color: #2563eb; }
     .top-info { font-size: 11px; color: #94a3b8; }
     .top-bar-right { display: flex; align-items: center; gap: 18px; font-size: 13px; color: #475569; font-weight: 600; }
 
-    /* Egalizare strictă lățime coloane */
+    /* FORȚARE COLOANE CU LĂȚIMI EXACT EGALE */
     [data-testid="column"] {
         flex: 1 1 0% !important;
         min-width: 0px !important;
     }
 
-    /* Stilizare Card-uri Albastre */
+    /* CARDURI ALBASTRE PĂTRATE EGALE */
     div.stButton > button {
         width: 100% !important;
-        height: 135px !important;
+        height: 140px !important;
         background-color: #2563eb !important;
         color: #ffffff !important;
         border-radius: 6px !important;
         border: none !important;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08) !important;
         transition: all 0.15s ease-in-out !important;
-        padding: 8px 2px !important;
+        padding: 5px !important;
     }
 
-    /* Text & Iconițe centrate în carduri */
     div.stButton > button p {
-        font-size: 12px !important;
+        font-size: 13px !important;
         font-weight: 700 !important;
         color: #ffffff !important;
         white-space: pre-line !important;
@@ -78,17 +102,16 @@ st.markdown("""
         text-align: center !important;
     }
 
-    /* Hover pe Card-uri */
     div.stButton > button:hover {
         background-color: #1d4ed8 !important;
         transform: translateY(-2px);
         box-shadow: 0 6px 12px rgba(37, 99, 235, 0.25) !important;
     }
 
-    /* Buton Înapoi */
     .back-btn button {
         height: 38px !important;
         background-color: #475569 !important;
+        width: auto !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -113,7 +136,7 @@ st.markdown(f"""
 
 conn = get_connection()
 
-# Funcție Procesare Import CSV MRPeasy
+# Funcție Import MRPeasy CSV
 def process_mrpeasy_csv(df):
     cursor = conn.cursor()
     imported_count = 0
@@ -168,54 +191,77 @@ def process_mrpeasy_csv(df):
     return imported_count, updated_count
 
 
-# 1. ECRAN PRINCIPAL (LAUNCHPAD - BUTOANE NATIVE STREAMLIT)
+# 1. ECRAN PRINCIPAL LAUNCHPAD
 if st.session_state['current_page'] == 'Home':
     
     # Rândul 1 (8 Card-uri)
-    col1, col2, col3, col4, col5, col6, col7, col8 = st.columns(8)
+    col1, col2, col3, col4, col5, col6, col7, col8 = st.columns([1,1,1,1,1,1,1,1])
     
     with col1:
-        if st.button("⏱️\n\nDashboard", key="btn_dash", on_click=navigate_to, args=("Dashboard",)): pass
+        if st.button("⏱️\n\nDashboard", key="btn_dash"):
+            set_page("Dashboard")
+            st.rerun()
     with col2:
-        if st.button("📊\n\nCRM", key="btn_crm", on_click=navigate_to, args=("CRM",)): pass
+        if st.button("📊\n\nCRM", key="btn_crm"):
+            set_page("CRM")
+            st.rerun()
     with col3:
-        if st.button("📅\n\nMy Production Plan", key="btn_my_plan", on_click=navigate_to, args=("My Production Plan",)): pass
+        if st.button("📅\n\nMy Production Plan", key="btn_my_plan"):
+            set_page("My Production Plan")
+            st.rerun()
     with col4:
-        if st.button("📑\n\nProduction Planning", key="btn_prod_plan", on_click=navigate_to, args=("Production Planning",)): pass
+        if st.button("📑\n\nProduction Planning", key="btn_prod_plan"):
+            set_page("Production Planning")
+            st.rerun()
     with col5:
-        if st.button("📦\n\nStock", key="btn_stock", on_click=navigate_to, args=("Stock",)): pass
+        if st.button("📦\n\nStock", key="btn_stock"):
+            set_page("Stock")
+            st.rerun()
     with col6:
-        if st.button("🛒\n\nProcurement", key="btn_proc", on_click=navigate_to, args=("Procurement",)): pass
+        if st.button("🛒\n\nProcurement", key="btn_proc"):
+            set_page("Procurement")
+            st.rerun()
     with col7:
-        if st.button("📁\n\nAccounting", key="btn_acc", on_click=navigate_to, args=("Accounting",)): pass
+        if st.button("📁\n\nAccounting", key="btn_acc"):
+            set_page("Accounting")
+            st.rerun()
     with col8:
-        if st.button("⚙️\n\nSettings", key="btn_sett", on_click=navigate_to, args=("Settings",)): pass
+        if st.button("⚙️\n\nSettings", key="btn_sett"):
+            set_page("Settings")
+            st.rerun()
 
     st.write("") # Spațiu
     
     # Rândul 2 (3 Card-uri)
-    col_a, col_b, col_c, col_d, col_e, col_f, col_g, col_h = st.columns(8)
+    col_a, col_b, col_c, col_d, col_e, col_f, col_g, col_h = st.columns([1,1,1,1,1,1,1,1])
     
     with col_a:
-        if st.button("🖥️\n\nDemo Data", key="btn_demo", on_click=navigate_to, args=("Demo",)): pass
+        if st.button("🖥️\n\nDemo Data", key="btn_demo"):
+            set_page("Demo")
+            st.rerun()
     with col_b:
-        if st.button("🎁\n\nFree Use", key="btn_free", on_click=navigate_to, args=("Free Use",)): pass
+        if st.button("🎁\n\nFree Use", key="btn_free"):
+            set_page("Free Use")
+            st.rerun()
     with col_c:
-        if st.button("❓\n\nSupport", key="btn_supp", on_click=navigate_to, args=("Support",)): pass
+        if st.button("❓\n\nSupport", key="btn_supp"):
+            set_page("Support")
+            st.rerun()
 
-# 2. ECRAN MODUL STOCK
+# 2. ECRAN MODUL STOCK (FĂRĂ EROARE SQL)
 elif st.session_state['current_page'] == 'Stock':
     col_back, col_title = st.columns([1, 6])
     with col_back:
         st.markdown('<div class="back-btn">', unsafe_allow_html=True)
-        if st.button("⬅️ Main Menu", on_click=navigate_to, args=("Home",)): pass
+        if st.button("⬅️ Main Menu"):
+            set_page("Home")
+            st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
     with col_title:
         st.title("📦 Stock & Inventory Management")
 
     st.divider()
 
-    # BARA DE ACȚIUNI ȘI FILTRE
     col_search, col_filter, col_add, col_import = st.columns([3, 2, 2, 2])
     
     with col_search:
@@ -230,15 +276,15 @@ elif st.session_state['current_page'] == 'Stock':
         with st.popover("➕ Articol Nou", use_container_width=True):
             with st.form("add_item_form"):
                 st.subheader("Adăugare Repere în Stoc")
-                code = st.text_input("Cod Articol (ex: MP-TEAVA-40x40)")
+                code = st.text_input("Cod Articol")
                 name = st.text_input("Denumire Articol")
                 item_type = st.selectbox("Tip Articol", ["RAW_MATERIAL", "SUBASSEMBLY", "FINISHED_GOOD"])
-                um = st.text_input("Unitate de Măsură (UM)", "BUC")
+                um = st.text_input("UM", "BUC")
                 current_stock = st.number_input("Stoc Inițial", min_value=0.0, value=0.0)
-                min_stock = st.number_input("Stoc Minim de Siguranță", min_value=0.0, value=0.0)
-                cost = st.number_input("Cost Unitar Estimat (RON)", min_value=0.0, value=0.0)
+                min_stock = st.number_input("Stoc Minim", min_value=0.0, value=0.0)
+                cost = st.number_input("Cost (RON)", min_value=0.0, value=0.0)
                 
-                if st.form_submit_button("💾 Salvează Articolul"):
+                if st.form_submit_button("💾 Salvează"):
                     try:
                         cursor = conn.cursor()
                         cursor.execute(
@@ -246,7 +292,7 @@ elif st.session_state['current_page'] == 'Stock':
                             (code, name, item_type, um, current_stock, min_stock, cost)
                         )
                         conn.commit()
-                        st.success(f"Articolul {code} a fost salvat!")
+                        st.success(f"Articolul {code} salvat!")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Eroare: {e}")
@@ -256,21 +302,21 @@ elif st.session_state['current_page'] == 'Stock':
         st.write("")
         with st.popover("📥 Import CSV MRPeasy", use_container_width=True):
             st.subheader("Import Stocuri din MRPeasy")
-            csv_file = st.file_uploader("Încarcă fișierul exportat din MRPeasy (Items.csv)", type=['csv'])
+            csv_file = st.file_uploader("Încarcă fișierul Items.csv", type=['csv'])
             if csv_file is not None:
                 try:
                     df_upload = pd.read_csv(csv_file)
                     st.write("Aperçu fișier:")
                     st.dataframe(df_upload.head(3))
                     
-                    if st.button("🚀 Execută Importul în Baza de Date"):
+                    if st.button("🚀 Execută Importul"):
                         added, updated = process_mrpeasy_csv(df_upload)
-                        st.success(f"Import finalizat! Adăugate: {added} repere noi, Actualizate: {updated} repere.")
+                        st.success(f"Import finalizat! Adăugate: {added}, Actualizate: {updated}.")
                         st.rerun()
                 except Exception as e:
-                    st.error(f"Eroare la procesare CSV: {e}")
+                    st.error(f"Eroare la procesare: {e}")
 
-    # INTEROGARE SQL SI FILTRARE
+    # INTEROGARE SQL SIGURĂ
     query = "SELECT id as ID, code as Cod, name as Denumire, type as Tip, unit_of_measure as UM, current_stock as 'Stoc Actual', min_stock as 'Stoc Min', cost_price as 'Cost (RON)' FROM items WHERE 1=1"
     params = []
     
@@ -290,9 +336,9 @@ elif st.session_state['current_page'] == 'Stock':
     stoc_critic = len(df_items[df_items['Stoc Actual'] <= df_items['Stoc Min']]) if not df_items.empty else 0
     valoare_totala = (df_items['Stoc Actual'] * df_items['Cost (RON)']).sum() if not df_items.empty else 0
     
-    kpi1.metric("Total Repere în Nomenclator", total_repere)
-    kpi2.metric("Repere Sub Stocul Minim", stoc_critic, delta_color="inverse")
-    kpi3.metric("Valoare Totală Stoc Estimat", f"{valoare_totala:,.2f} RON")
+    kpi1.metric("Total Repere", total_repere)
+    kpi2.metric("Stoc Critic", stoc_critic, delta_color="inverse")
+    kpi3.metric("Valoare Totală", f"{valoare_totala:,.2f} RON")
     kpi4.metric("Status Sincronizare", "Live 🟢")
 
     st.write("### Lista Articolelor din Stoc")
@@ -303,7 +349,9 @@ else:
     col_back, col_title = st.columns([1, 6])
     with col_back:
         st.markdown('<div class="back-btn">', unsafe_allow_html=True)
-        if st.button("⬅️ Main Menu", on_click=navigate_to, args=("Home",)): pass
+        if st.button("⬅️ Main Menu"):
+            set_page("Home")
+            st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
     with col_title:
         st.title(f"Modul: {st.session_state['current_page']}")
