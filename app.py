@@ -769,7 +769,7 @@ elif current_page == 'Stock':
                     calc_height = max(180, len(df_u) * 35 + 40)
                     components.html(iframe_uom_html, height=calc_height, scrolling=True)
 
-                # 3. STORAGE LOCATIONS
+                # 3. STORAGE LOCATIONS (CU CONFIRMARE DE ȘTERGERE)
                 elif current_setting == "Storage_locations":
                     c_title, c_btn1, c_btn2, c_btn3 = st.columns([5, 2, 1.5, 2])
                     with c_title:
@@ -817,7 +817,38 @@ elif current_page == 'Stock':
                         p_l.append(f"%{l_search}%")
 
                     df_l = pd.read_sql_query(q_l, conn, params=p_l)
-                    st.dataframe(df_l, use_container_width=True, hide_index=True)
+
+                    # FIȘARE TABELARĂ CU BUTON DE ȘTERGERE & POPUP CONFIRMARE
+                    st.write("")
+                    for _, row in df_l.iterrows():
+                        loc_id = row['ID']
+                        loc_name = row['Storage location']
+                        loc_site = row['Site']
+                        loc_bc = row['Barcode']
+
+                        col1, col2, col3, col4 = st.columns([3, 2, 3, 1])
+                        with col1:
+                            st.write(f"**{loc_name}**")
+                        with col2:
+                            st.write(f"`{loc_site}`")
+                        with col3:
+                            st.write(f"`{loc_bc}`")
+                        with col4:
+                            with st.popover("🗑️", use_container_width=True):
+                                st.write(f"**⚠️ Confirmare Ștergere**")
+                                st.warning(f"Ești sigur că vrei să ștergi locația **{loc_name}**?")
+                                col_confirm, col_cancel = st.columns(2)
+                                with col_confirm:
+                                    if st.button("DA, Șterge", key=f"del_loc_{loc_id}", type="primary", use_container_width=True):
+                                        cursor = conn.cursor()
+                                        cursor.execute("DELETE FROM storage_locations WHERE id = ?", (loc_id,))
+                                        conn.commit()
+                                        st.success(f"Locația {loc_name} a fost ștearsă!")
+                                        st.rerun()
+                                with col_cancel:
+                                    st.write("")
+
+                        st.divider()
 
     # ------------------ SUBTAB: CRITICAL ON-HAND ------------------
     elif current_subtab == "Critical_on_hand":
