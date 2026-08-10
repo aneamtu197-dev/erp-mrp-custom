@@ -93,7 +93,7 @@ def init_and_repair_db():
     );
     """)
 
-    # Customers Table (Extinsă conform CSV MRPeasy)
+    # Customers Table (Extinsă conform Pozei optiuni client.JPG)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS customers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -109,7 +109,39 @@ def init_and_repair_db():
         email VARCHAR(255),
         web VARCHAR(255),
         pricelist_number VARCHAR(50),
-        pricelist_name VARCHAR(255)
+        pricelist_name VARCHAR(255) DEFAULT 'Default pricelist',
+        tax_rate REAL DEFAULT 0.0,
+        default_discount REAL DEFAULT 0.0,
+        payment_period INTEGER DEFAULT 0,
+        trade_credit_limit REAL DEFAULT 0.0,
+        language VARCHAR(50) DEFAULT 'English',
+        currency VARCHAR(10) DEFAULT '€'
+    );
+    """)
+
+    # Customer Contacts
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS customer_contacts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_id INTEGER NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        position VARCHAR(100),
+        phone VARCHAR(100),
+        teams VARCHAR(100),
+        email VARCHAR(255),
+        FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
+    );
+    """)
+
+    # Customer Notes
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS customer_notes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_id INTEGER NOT NULL,
+        note TEXT NOT NULL,
+        created_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+        modified_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
     );
     """)
 
@@ -249,6 +281,7 @@ prod_tab = query_params.get("prod_tab", "Operations")
 rfq_subtab = query_params.get("rfq_subtab", "Customer_orders")
 rfq_inner_tab = query_params.get("rfq_inner", "Orders")
 cust_inner_tab = query_params.get("cust_inner", "Companies")
+edit_cust_id = query_params.get("cust_id", None)
 edit_uom_id = query_params.get("uom_id", None)
 
 # 4. CSS STILIZARE REPLICATĂ DUPĂ MRPEASY
@@ -375,16 +408,6 @@ st.markdown("""
         margin-bottom: 10px !important;
     }
     .mrp-title { color: #ffffff !important; font-size: 12px !important; font-weight: 700 !important; text-align: center !important; }
-
-    .uom-tooltip {
-        background-color: #1e293b;
-        color: #ffffff;
-        font-size: 11px;
-        padding: 8px 12px;
-        border-radius: 4px;
-        margin-top: 5px;
-        margin-bottom: 15px;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -768,216 +791,367 @@ elif current_page == 'Order_and_RFQ' or current_page == 'CRM':
         else:
             st.info("Afișare articole comenzi clienți.")
 
-    # ------------------ SUBTAB: CUSTOMERS (REPLICAT EXACT POZA Customers.JPG + IMPORT CSV) ------------------
+    # ------------------ SUBTAB: CUSTOMERS (PAGINA PRINCIPALĂ SAU EDITARE DETALII) ------------------
     elif rfq_subtab == "Customers":
         
-        # Sub-tabs secundare: Companies | Contacts
-        st.markdown(f"""
-        <div class="mrp-inner-subtabs">
-            <a href="?page=Order_and_RFQ&rfq_subtab=Customers&cust_inner=Companies" target="_self" class="{"mrp-inner-active" if cust_inner_tab=="Companies" else "mrp-inner-tab"}">Companies</a>
-            <a href="?page=Order_and_RFQ&rfq_subtab=Customers&cust_inner=Contacts" target="_self" class="{"mrp-inner-active" if cust_inner_tab=="Contacts" else "mrp-inner-tab"}">Contacts</a>
-        </div>
-        """, unsafe_allow_html=True)
-
-        if cust_inner_tab == "Companies":
-            top_cust1, top_cust2, top_cust3, top_cust4, top_cust5 = st.columns([2, 4, 1, 1, 2])
+        # DACĂ ESTE SELECTAT UN CLIENT PENTRU EDITARE DETALII (REPLICAT EXACT POZA optiuni client.JPG)
+        if edit_cust_id is not None:
             
-            with top_cust1:
-                st.markdown("### Customers")
-            
-            with top_cust2:
-                with st.popover("➕ Create", use_container_width=False):
-                    with st.form("add_customer_form"):
-                        st.subheader("Adăugare Client Nou")
-                        c_num = st.text_input("Number (ex: CU00092)")
-                        c_name = st.text_input("Name")
-                        c_status = st.selectbox("Status", ["No contact", "RFQ_TECH", "Permanent buyer", "No interest"])
-                        c_manager = st.text_input("Account manager", "General")
-                        c_phone = st.text_input("Phone")
-                        c_email = st.text_input("E-mail")
-                        c_pnum = st.text_input("Pricelist number")
-                        c_pname = st.text_input("Pricelist name")
+            c_row = conn.cursor().execute("SELECT * FROM customers WHERE id = ?", (edit_cust_id,)).fetchone()
+            if c_row:
+                # Preluare date din tuple SQL
+                c_id = c_row[0]
+                c_num = c_row[1]
+                c_name = c_row[2]
+                c_status = c_row[3]
+                c_reg = c_row[4] if c_row[4] else ""
+                c_vat = c_row[5] if c_row[5] else ""
+                c_manager = c_row[8] if c_row[8] else "General"
+                c_phone = c_row[9] if c_row[9] else ""
+                c_email = c_row[10] if c_row[10] else ""
+                c_pname = c_row[13] if c_row[13] else "Default pricelist"
+                c_tax = c_row[14] if c_row[14] else 0.0
+                c_discount = c_row[15] if c_row[15] else 0.0
+                c_pay_period = c_row[16] if c_row[16] else 0
+                c_credit_limit = c_row[17] if c_row[17] else 0.0
+                c_lang = c_row[18] if c_row[18] else "English"
+                c_curr = c_row[19] if c_row[19] else "€"
 
-                        if st.form_submit_button("💾 Save Customer"):
+                st.markdown(f"### Customer {c_num} {c_name} details")
+                
+                # BARA BUTOANE SUS (Back, Save, Delete, Reports)
+                btn_c1, btn_c2, btn_c3, btn_c4, _ = st.columns([1, 1, 1, 1, 6])
+                with btn_c1:
+                    st.markdown(f'<a href="?page=Order_and_RFQ&rfq_subtab=Customers" target="_self"><button style="height:36px; background-color:#e2e8f0; color:#1e293b; border:none; border-radius:4px; padding:0 20px; font-weight:bold; cursor:pointer;">Back</button></a>', unsafe_allow_html=True)
+                with btn_c2:
+                    save_top = st.button("Save", type="primary", key="save_c_top")
+                with btn_c3:
+                    del_top = st.button("Delete", key="del_c_top")
+                with btn_c4:
+                    st.button("Reports", key="rep_c_top")
+
+                st.write("")
+
+                # FORMULAR DETALII CLIENT (2 COLOANE CONFORM POZEI)
+                col_left, col_right = st.columns(2)
+
+                with col_left:
+                    val_num = st.text_input("Number *", value=c_num)
+                    val_name = st.text_input("Name *", value=c_name)
+                    val_status = st.selectbox("Status", ["No contact", "RFQ_TECH", "Permanent buyer", "No interest"], index=["No contact", "RFQ_TECH", "Permanent buyer", "No interest"].index(c_status) if c_status in ["No contact", "RFQ_TECH", "Permanent buyer", "No interest"] else 0)
+                    val_reg = st.text_input("Reg. no.", value=c_reg)
+                    val_vat = st.text_input("Tax/VAT number", value=c_vat)
+                    
+                    st.write("")
+                    st.markdown("**Contact information**")
+                    col_ci1, col_ci2 = st.columns([1.5, 2.5])
+                    with col_ci1:
+                        ci_type = st.selectbox("Type", ["Phone", "E-mail", "Web"], label_visibility="collapsed")
+                    with col_ci2:
+                        val_phone = st.text_input("Value", value=c_phone, label_visibility="collapsed")
+
+                    st.markdown("**Files** 📁 ☁️ 🔗")
+
+                with col_right:
+                    val_c_started = st.date_input("Contact started *", datetime.now())
+                    val_n_contact = st.date_input("Next contact", datetime.now())
+                    val_manager = st.selectbox("Account manager", ["General", "a.neamtu@deimob.ro"], index=1 if c_manager=="a.neamtu@deimob.ro" else 0)
+                    val_tax = st.number_input("Tax rate %", value=float(c_tax))
+                    val_discount = st.number_input("Default discount %", value=float(c_discount))
+                    val_pname = st.selectbox("Pricelist", ["Default pricelist"], index=0)
+                    
+                    col_pp1, col_pp2 = st.columns([2, 2])
+                    with col_pp1:
+                        val_pay_period = st.number_input("Payment period (days after)", value=int(c_pay_period))
+                    with col_pp2:
+                        st.selectbox("Invoicing Base", ["the invoice date"], label_visibility="collapsed")
+
+                    val_credit_limit = st.number_input("Trade credit limit €", value=float(c_credit_limit))
+                    val_lang = st.selectbox("Language", ["English", "Romanian"], index=0)
+                    val_curr = st.selectbox("Currency", ["€", "$", "RON"], index=0)
+
+                # BARA BUTOANE JOS
+                st.write("")
+                btn_b1, btn_b2, btn_b3, btn_b4, _ = st.columns([1, 1, 1, 1, 6])
+                with btn_b1:
+                    st.markdown(f'<a href="?page=Order_and_RFQ&rfq_subtab=Customers" target="_self"><button style="height:36px; background-color:#e2e8f0; color:#1e293b; border:none; border-radius:4px; padding:0 20px; font-weight:bold; cursor:pointer;">Back</button></a>', unsafe_allow_html=True)
+                with btn_b2:
+                    save_bot = st.button("Save", type="primary", key="save_c_bot")
+                with btn_b3:
+                    del_bot = st.button("Delete", key="del_c_bot")
+                with btn_b4:
+                    st.button("Reports", key="rep_c_bot")
+
+                st.divider()
+
+                # SECȚIUNEA CONTACTS
+                st.markdown("### Contacts")
+                df_cust_contacts = pd.read_sql_query("SELECT id, name as Name, position as Position, phone as Phone, teams as Teams, email as 'E-mail' FROM customer_contacts WHERE customer_id = ?", conn, params=[c_id])
+                
+                with st.popover("➕ Adaugă Persoană de Contact", use_container_width=False):
+                    with st.form("add_contact_form"):
+                        cnt_name = st.text_input("Name")
+                        cnt_pos = st.text_input("Position")
+                        cnt_phone = st.text_input("Phone")
+                        cnt_teams = st.text_input("Teams")
+                        cnt_email = st.text_input("E-mail")
+                        if st.form_submit_button("Save Contact"):
+                            conn.cursor().execute("INSERT INTO customer_contacts (customer_id, name, position, phone, teams, email) VALUES (?, ?, ?, ?, ?, ?)", (c_id, cnt_name, cnt_pos, cnt_phone, cnt_teams, cnt_email))
+                            conn.commit()
+                            st.rerun()
+
+                if not df_cust_contacts.empty:
+                    st.dataframe(df_cust_contacts, use_container_width=True, hide_index=True)
+                else:
+                    st.caption("Nicio persoană de contact adăugată.")
+
+                st.divider()
+
+                # SECȚIUNEA NOTES
+                st.markdown("### Notes")
+                df_cust_notes = pd.read_sql_query("SELECT id, created_date as Created, modified_date as Modified, note as Note FROM customer_notes WHERE customer_id = ?", conn, params=[c_id])
+                
+                with st.popover("➕ Adaugă Notă", use_container_width=False):
+                    with st.form("add_note_form"):
+                        note_text = st.text_area("Note")
+                        if st.form_submit_button("Save Note"):
+                            conn.cursor().execute("INSERT INTO customer_notes (customer_id, note) VALUES (?, ?)", (c_id, note_text))
+                            conn.commit()
+                            st.rerun()
+
+                if not df_cust_notes.empty:
+                    st.dataframe(df_cust_notes, use_container_width=True, hide_index=True)
+                else:
+                    st.caption("Nicio notă adăugată.")
+
+                # SALVARE CLIENT
+                if save_top or save_bot:
+                    conn.cursor().execute("""
+                        UPDATE customers SET 
+                        number=?, name=?, status=?, reg_no=?, vat_number=?, account_manager=?, phone=?,
+                        tax_rate=?, default_discount=?, pricelist_name=?, payment_period=?, trade_credit_limit=?, language=?, currency=?
+                        WHERE id=?
+                    """, (val_num, val_name, val_status, val_reg, val_vat, val_manager, val_phone, val_tax, val_discount, val_pname, val_pay_period, val_credit_limit, val_lang, val_curr, c_id))
+                    conn.commit()
+                    st.success("Datele clientului au fost salvate cu succes!")
+                    st.rerun()
+
+                # ȘTERGERE CLIENT
+                if del_top or del_bot:
+                    conn.cursor().execute("DELETE FROM customers WHERE id = ?", (c_id,))
+                    conn.commit()
+                    st.success("Clientul a fost șters!")
+                    st.markdown('<meta http-equiv="refresh" content="0; url=?page=Order_and_RFQ&rfq_subtab=Customers">', unsafe_allow_html=True)
+
+        # TABELUL PRINCIPAL DE CLIENȚI (Poza Customers.JPG)
+        else:
+            st.markdown(f"""
+            <div class="mrp-inner-subtabs">
+                <a href="?page=Order_and_RFQ&rfq_subtab=Customers&cust_inner=Companies" target="_self" class="{"mrp-inner-active" if cust_inner_tab=="Companies" else "mrp-inner-tab"}">Companies</a>
+                <a href="?page=Order_and_RFQ&rfq_subtab=Customers&cust_inner=Contacts" target="_self" class="{"mrp-inner-active" if cust_inner_tab=="Contacts" else "mrp-inner-tab"}">Contacts</a>
+            </div>
+            """, unsafe_allow_html=True)
+
+            if cust_inner_tab == "Companies":
+                top_cust1, top_cust2, top_cust3, top_cust4, top_cust5 = st.columns([2, 4, 1, 1, 2])
+                
+                with top_cust1:
+                    st.markdown("### Customers")
+                
+                with top_cust2:
+                    with st.popover("➕ Create", use_container_width=False):
+                        with st.form("add_customer_form"):
+                            st.subheader("Adăugare Client Nou")
+                            c_num = st.text_input("Number (ex: CU00092)")
+                            c_name = st.text_input("Name")
+                            c_status = st.selectbox("Status", ["No contact", "RFQ_TECH", "Permanent buyer", "No interest"])
+                            c_manager = st.text_input("Account manager", "General")
+                            c_phone = st.text_input("Phone")
+                            c_email = st.text_input("E-mail")
+                            c_pnum = st.text_input("Pricelist number")
+                            c_pname = st.text_input("Pricelist name")
+
+                            if st.form_submit_button("💾 Save Customer"):
+                                try:
+                                    cursor = conn.cursor()
+                                    cursor.execute("""
+                                        INSERT INTO customers (number, name, status, account_manager, phone, email, pricelist_number, pricelist_name)
+                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                    """, (c_num, c_name, c_status, c_manager, c_phone, c_email, c_pnum, c_pname))
+                                    conn.commit()
+                                    st.success(f"Clientul {c_name} a fost salvat!")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Eroare: {e}")
+
+                with top_cust3:
+                    st.button("↓ PDF", use_container_width=True)
+
+                with top_cust4:
+                    df_cust_exp = pd.read_sql_query("SELECT number as Number, name as Name, status as Status, account_manager as 'Account manager', phone as Phone, email as 'E-mail', pricelist_number as 'Pricelist number', pricelist_name as 'Pricelist name' FROM customers", conn)
+                    st.download_button("↓ CSV", data=df_cust_exp.to_csv(index=False), file_name="customers_export.csv", mime="text/csv", use_container_width=True)
+
+                with top_cust5:
+                    with st.popover("↑ Import from CSV", use_container_width=True):
+                        st.subheader("Import Customers din MRPeasy")
+                        cust_csv = st.file_uploader("Încarcă customers_08_10_2026.csv", type=['csv'], key="cust_csv_up")
+                        if cust_csv is not None:
                             try:
-                                cursor = conn.cursor()
-                                cursor.execute("""
-                                    INSERT INTO customers (number, name, status, account_manager, phone, email, pricelist_number, pricelist_name)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                                """, (c_num, c_name, c_status, c_manager, c_phone, c_email, c_pnum, c_pname))
-                                conn.commit()
-                                st.success(f"Clientul {c_name} a fost salvat!")
-                                st.rerun()
+                                df_c_up = pd.read_csv(cust_csv)
+                                st.write("Aperçu:")
+                                st.dataframe(df_c_up.head(3))
+                                if st.button("🚀 Execută Importul Clienți"):
+                                    a, u = process_customers_csv(df_c_up)
+                                    st.success(f"Import finalizat! Adăugați: {a}, Actualizați: {u}.")
+                                    st.rerun()
                             except Exception as e:
                                 st.error(f"Eroare: {e}")
 
-            with top_cust3:
-                st.button("↓ PDF", use_container_width=True)
+                st.write("")
 
-            with top_cust4:
-                df_cust_exp = pd.read_sql_query("SELECT number as Number, name as Name, status as Status, account_manager as 'Account manager', phone as Phone, email as 'E-mail', pricelist_number as 'Pricelist number', pricelist_name as 'Pricelist name' FROM customers", conn)
-                st.download_button("↓ CSV", data=df_cust_exp.to_csv(index=False), file_name="customers_export.csv", mime="text/csv", use_container_width=True)
+                # FILTRELE DIN ANTET (CONFORM POZEI Customers.JPG)
+                status_opts = ["All"] + [r[0] for r in conn.cursor().execute("SELECT DISTINCT status FROM customers WHERE status IS NOT NULL AND status != '' ORDER BY status").fetchall()]
+                manager_opts = ["All"] + [r[0] for r in conn.cursor().execute("SELECT DISTINCT account_manager FROM customers WHERE account_manager IS NOT NULL AND account_manager != '' ORDER BY account_manager").fetchall()]
 
-            with top_cust5:
-                with st.popover("↑ Import from CSV", use_container_width=True):
-                    st.subheader("Import Customers din MRPeasy")
-                    cust_csv = st.file_uploader("Încarcă customers_08_10_2026.csv", type=['csv'], key="cust_csv_up")
-                    if cust_csv is not None:
-                        try:
-                            df_c_up = pd.read_csv(cust_csv)
-                            st.write("Aperçu:")
-                            st.dataframe(df_c_up.head(3))
-                            if st.button("🚀 Execută Importul Clienți"):
-                                a, u = process_customers_csv(df_c_up)
-                                st.success(f"Import finalizat! Adăugați: {a}, Actualizați: {u}.")
-                                st.rerun()
-                        except Exception as e:
-                            st.error(f"Eroare: {e}")
+                c_f_num, c_f_name, c_f_st, c_f_nxt, c_f_mgr, c_f_ph, c_f_em, c_f_pnum, c_f_pname, c_f_btn = st.columns([1.2, 2.5, 1.5, 1.2, 1.8, 1.2, 1.5, 1.2, 1.5, 1])
 
-            st.write("")
+                with c_f_num:
+                    f_c_num = st.text_input("Number ↑", "", placeholder="Filter Number", key="f_c_num")
 
-            # FILTRELE DIN ANTET (CONFORM POZEI Customers.JPG)
-            status_opts = ["All"] + [r[0] for r in conn.cursor().execute("SELECT DISTINCT status FROM customers WHERE status IS NOT NULL AND status != '' ORDER BY status").fetchall()]
-            manager_opts = ["All"] + [r[0] for r in conn.cursor().execute("SELECT DISTINCT account_manager FROM customers WHERE account_manager IS NOT NULL AND account_manager != '' ORDER BY account_manager").fetchall()]
+                with c_f_name:
+                    f_c_name = st.text_input("Name", "", placeholder="Filter Name", key="f_c_name")
 
-            c_f_num, c_f_name, c_f_st, c_f_nxt, c_f_mgr, c_f_ph, c_f_em, c_f_pnum, c_f_pname, c_f_btn = st.columns([1.2, 2.5, 1.5, 1.2, 1.8, 1.2, 1.5, 1.2, 1.5, 1])
+                with c_f_st:
+                    f_c_st = st.selectbox("Status", status_opts, key="f_c_st")
 
-            with c_f_num:
-                f_c_num = st.text_input("Number ↑", "", placeholder="Filter Number", key="f_c_num")
+                with c_f_nxt:
+                    st.caption("Next contact min/max")
 
-            with c_f_name:
-                f_c_name = st.text_input("Name", "", placeholder="Filter Name", key="f_c_name")
+                with c_f_mgr:
+                    f_c_mgr = st.selectbox("Account manager", manager_opts, key="f_c_mgr")
 
-            with c_f_st:
-                f_c_st = st.selectbox("Status", status_opts, key="f_c_st")
+                with c_f_ph:
+                    f_c_ph = st.text_input("Phone", "", placeholder="Phone", key="f_c_ph")
 
-            with c_f_nxt:
-                st.caption("Next contact min/max")
+                with c_f_em:
+                    f_c_em = st.text_input("E-mail", "", placeholder="E-mail", key="f_c_em")
 
-            with c_f_mgr:
-                f_c_mgr = st.selectbox("Account manager", manager_opts, key="f_c_mgr")
+                with c_f_pnum:
+                    f_c_pnum = st.text_input("Pricelist number", "", placeholder="Pricelist No.", key="f_c_pnum")
 
-            with c_f_ph:
-                f_c_ph = st.text_input("Phone", "", placeholder="Phone", key="f_c_ph")
+                with c_f_pname:
+                    f_c_pname = st.text_input("Pricelist name ↓", "", placeholder="Pricelist Name", key="f_c_pname")
 
-            with c_f_em:
-                f_c_em = st.text_input("E-mail", "", placeholder="E-mail", key="f_c_em")
+                with c_f_btn:
+                    btn_c_search = st.button("Search", type="primary", use_container_width=True)
 
-            with c_f_pnum:
-                f_c_pnum = st.text_input("Pricelist number", "", placeholder="Pricelist No.", key="f_c_pnum")
+                q_c = "SELECT id, number, name, status, account_manager, phone, email, pricelist_number, pricelist_name FROM customers WHERE 1=1"
+                p_c = []
 
-            with c_f_pname:
-                f_c_pname = st.text_input("Pricelist name ↓", "", placeholder="Pricelist Name", key="f_c_pname")
+                if f_c_num:
+                    q_c += " AND number LIKE ?"
+                    p_c.append(f"%{f_c_num}%")
 
-            with c_f_btn:
-                btn_c_search = st.button("Search", type="primary", use_container_width=True)
+                if f_c_name:
+                    q_c += " AND name LIKE ?"
+                    p_c.append(f"%{f_c_name}%")
 
-            # INTEROGARE SQL FILTRATĂ
-            q_c = "SELECT id, number, name, status, account_manager, phone, email, pricelist_number, pricelist_name FROM customers WHERE 1=1"
-            p_c = []
+                if f_c_st != "All":
+                    q_c += " AND status = ?"
+                    p_c.append(f_c_st)
 
-            if f_c_num:
-                q_c += " AND number LIKE ?"
-                p_c.append(f"%{f_c_num}%")
+                if f_c_mgr != "All":
+                    q_c += " AND account_manager = ?"
+                    p_c.append(f_c_mgr)
 
-            if f_c_name:
-                q_c += " AND name LIKE ?"
-                p_c.append(f"%{f_c_name}%")
+                if f_c_ph:
+                    q_c += " AND phone LIKE ?"
+                    p_c.append(f"%{f_c_ph}%")
 
-            if f_c_st != "All":
-                q_c += " AND status = ?"
-                p_c.append(f_c_st)
+                if f_c_em:
+                    q_c += " AND email LIKE ?"
+                    p_c.append(f"%{f_c_em}%")
 
-            if f_c_mgr != "All":
-                q_c += " AND account_manager = ?"
-                p_c.append(f_c_mgr)
+                if f_c_pnum:
+                    q_c += " AND pricelist_number LIKE ?"
+                    p_c.append(f"%{f_c_pnum}%")
 
-            if f_c_ph:
-                q_c += " AND phone LIKE ?"
-                p_c.append(f"%{f_c_ph}%")
+                if f_c_pname:
+                    q_c += " AND pricelist_name LIKE ?"
+                    p_c.append(f"%{f_c_pname}%")
 
-            if f_c_em:
-                q_c += " AND email LIKE ?"
-                p_c.append(f"%{f_c_em}%")
+                q_c += " ORDER BY id DESC"
 
-            if f_c_pnum:
-                q_c += " AND pricelist_number LIKE ?"
-                p_c.append(f"%{f_c_pnum}%")
+                df_cust_res = pd.read_sql_query(q_c, conn, params=p_c)
 
-            if f_c_pname:
-                q_c += " AND pricelist_name LIKE ?"
-                p_c.append(f"%{f_c_pname}%")
+                # AFIȘARE TABELARĂ CU LINK DIRECT CĂTRE DETALII CLIENT (✏️)
+                rows_cust_html = ""
+                for idx, r in df_cust_res.iterrows():
+                    rows_cust_html += f"""
+                    <tr>
+                        <td>{idx+1}</td>
+                        <td><b>{r['number']}</b></td>
+                        <td>{r['name']}</td>
+                        <td>{r['status']}</td>
+                        <td>-</td>
+                        <td>{r['account_manager']}</td>
+                        <td>{r['phone'] if r['phone'] else ''}</td>
+                        <td>{r['email'] if r['email'] else ''}</td>
+                        <td>{r['pricelist_number'] if r['pricelist_number'] else ''}</td>
+                        <td>{r['pricelist_name'] if r['pricelist_name'] else ''}</td>
+                        <td style="text-align: right;">
+                            <a href="?page=Order_and_RFQ&rfq_subtab=Customers&cust_id={r['id']}" target="_top" style="color:#64748b; text-decoration:none;" title="Edit details">✏️</a>
+                        </td>
+                        <td style="text-align: right;">📊</td>
+                        <td style="text-align: right;"><input type="checkbox" /></td>
+                    </tr>
+                    """
 
-            q_c += " ORDER BY id DESC"
-
-            df_cust_res = pd.read_sql_query(q_c, conn, params=p_c)
-
-            # AFIȘARE TABELARĂ 100% IDENTICĂ CU Customers.JPG
-            rows_cust_html = ""
-            for idx, r in df_cust_res.iterrows():
-                rows_cust_html += f"""
-                <tr>
-                    <td>{idx+1}</td>
-                    <td><b>{r['number']}</b></td>
-                    <td>{r['name']}</td>
-                    <td>{r['status']}</td>
-                    <td>-</td>
-                    <td>{r['account_manager']}</td>
-                    <td>{r['phone'] if r['phone'] else ''}</td>
-                    <td>{r['email'] if r['email'] else ''}</td>
-                    <td>{r['pricelist_number'] if r['pricelist_number'] else ''}</td>
-                    <td>{r['pricelist_name'] if r['pricelist_name'] else ''}</td>
-                    <td style="text-align: right;">✏️</td>
-                    <td style="text-align: right;">📊</td>
-                    <td style="text-align: right;"><input type="checkbox" /></td>
-                </tr>
+                iframe_cust_html = f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                <style>
+                    * {{ box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }}
+                    body {{ background-color: #ffffff; padding: 0; }}
+                    .mrp-table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
+                    .mrp-table th {{ background-color: #e2e8f0; color: #475569; font-weight: 600; padding: 8px 12px; text-align: left; border-bottom: 1px solid #cbd5e1; }}
+                    .mrp-table td {{ padding: 8px 12px; border-bottom: 1px solid #f1f5f9; color: #1e293b; }}
+                    .mrp-table tr:hover {{ background-color: #f8fafc; }}
+                </style>
+                </head>
+                <body>
+                    <table class="mrp-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 30px;">+</th>
+                                <th>Number ↑</th>
+                                <th>Name</th>
+                                <th>Status</th>
+                                <th>Next contact</th>
+                                <th>Account manager</th>
+                                <th>Phone</th>
+                                <th>E-mail</th>
+                                <th>Pricelist number</th>
+                                <th>Pricelist name ↓</th>
+                                <th style="width: 30px;">✏️</th>
+                                <th style="width: 30px;">📊</th>
+                                <th style="width: 30px;">+</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {rows_cust_html}
+                        </tbody>
+                    </table>
+                </body>
+                </html>
                 """
 
-            iframe_cust_html = f"""
-            <!DOCTYPE html>
-            <html>
-            <head>
-            <style>
-                * {{ box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }}
-                body {{ background-color: #ffffff; padding: 0; }}
-                .mrp-table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
-                .mrp-table th {{ background-color: #e2e8f0; color: #475569; font-weight: 600; padding: 8px 12px; text-align: left; border-bottom: 1px solid #cbd5e1; }}
-                .mrp-table td {{ padding: 8px 12px; border-bottom: 1px solid #f1f5f9; color: #1e293b; }}
-                .mrp-table tr:hover {{ background-color: #f8fafc; }}
-            </style>
-            </head>
-            <body>
-                <table class="mrp-table">
-                    <thead>
-                        <tr>
-                            <th style="width: 30px;">+</th>
-                            <th>Number ↑</th>
-                            <th>Name</th>
-                            <th>Status</th>
-                            <th>Next contact</th>
-                            <th>Account manager</th>
-                            <th>Phone</th>
-                            <th>E-mail</th>
-                            <th>Pricelist number</th>
-                            <th>Pricelist name ↓</th>
-                            <th style="width: 30px;">✏️</th>
-                            <th style="width: 30px;">📊</th>
-                            <th style="width: 30px;">+</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {rows_cust_html}
-                    </tbody>
-                </table>
-            </body>
-            </html>
-            """
+                calc_h_cust = max(300, len(df_cust_res) * 38 + 50)
+                components.html(iframe_cust_html, height=calc_h_cust, scrolling=True)
 
-            calc_h_cust = max(300, len(df_cust_res) * 38 + 50)
-            components.html(iframe_cust_html, height=calc_h_cust, scrolling=True)
-
-        else:
-            st.info("Afișare persoane de contact clienți (Contacts).")
+            else:
+                st.info("Afișare persoane de contact clienți (Contacts).")
 
     else:
         st.subheader(f"📊 Order and RFQ - {rfq_subtab.replace('_', ' ')}")
