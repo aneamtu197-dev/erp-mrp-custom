@@ -21,7 +21,8 @@ def init_and_repair_db():
         storage_location VARCHAR(100) DEFAULT '-',
         current_stock REAL DEFAULT 0.0,
         min_stock REAL DEFAULT 0.0,
-        cost_price REAL DEFAULT 0.0
+        cost_price REAL DEFAULT 0.0,
+        selling_price REAL DEFAULT 0.0
     );
     """)
     
@@ -29,6 +30,8 @@ def init_and_repair_db():
     columns = [column[1] for column in cursor.fetchall()]
     if 'storage_location' not in columns:
         cursor.execute("ALTER TABLE items ADD COLUMN storage_location VARCHAR(100) DEFAULT '-';")
+    if 'selling_price' not in columns:
+        cursor.execute("ALTER TABLE items ADD COLUMN selling_price REAL DEFAULT 0.0;")
         
     conn.commit()
     conn.close()
@@ -42,12 +45,13 @@ def get_connection():
 query_params = st.query_params
 current_page = query_params.get("page", "Home")
 
-# 4. CSS STILIZARE REPLICATĂ DUPĂ POZA 10
+# 4. CSS STILIZARE DUPĂ POZA 11
 st.markdown("""
 <style>
     .stApp { background-color: #f8fafc; }
     [data-testid="stSidebar"] { display: none; }
 
+    /* Top Bar */
     .top-bar {
         display: flex;
         justify-content: space-between;
@@ -63,6 +67,7 @@ st.markdown("""
     .top-info { font-size: 11px; color: #94a3b8; }
     .top-bar-right { display: flex; align-items: center; gap: 15px; font-size: 12px; color: #475569; font-weight: 600; }
 
+    /* Meniu Rapid Iconițe */
     .mrp-icon-bar {
         display: flex;
         background-color: #1e62d0;
@@ -80,10 +85,9 @@ st.markdown("""
         border-radius: 4px;
         transition: background 0.15s;
     }
-    .mrp-icon-item:hover {
-        background-color: #1d4ed8;
-    }
+    .mrp-icon-item:hover { background-color: #1d4ed8; }
 
+    /* Sub-meniu MRPeasy Sub-tabs */
     .mrp-subtabs {
         display: flex;
         gap: 20px;
@@ -93,20 +97,19 @@ st.markdown("""
         font-size: 13px;
         font-weight: 600;
     }
-    .mrp-subtab-active {
-        color: #2563eb;
-        border-bottom: 2px solid #2563eb;
-        padding-bottom: 8px;
-        text-decoration: none;
-    }
-    .mrp-subtab {
-        color: #64748b;
-        text-decoration: none;
-    }
-    .mrp-subtab:hover {
-        color: #1e293b;
+    .mrp-subtab-active { color: #2563eb; border-bottom: 2px solid #2563eb; padding-bottom: 8px; text-decoration: none; }
+    .mrp-subtab { color: #64748b; text-decoration: none; }
+    .mrp-subtab:hover { color: #1e293b; }
+
+    /* Formatare Filtre - Poza 11 */
+    .filter-label {
+        font-size: 11px;
+        font-weight: 700;
+        color: #475569;
+        margin-bottom: 2px;
     }
 
+    /* Grid Launchpad pentru Home */
     .mrp-launchpad {
         display: grid;
         grid-template-columns: repeat(8, 1fr);
@@ -129,10 +132,7 @@ st.markdown("""
         box-sizing: border-box !important;
     }
     .mrp-card-alt { background-color: #3b82f6 !important; }
-    .mrp-card:hover {
-        background-color: #1d4ed8 !important;
-        transform: translateY(-2px) !important;
-    }
+    .mrp-card:hover { background-color: #1d4ed8 !important; transform: translateY(-2px) !important; }
     .mrp-circle {
         width: 48px !important;
         height: 48px !important;
@@ -144,12 +144,7 @@ st.markdown("""
         font-size: 22px !important;
         margin-bottom: 10px !important;
     }
-    .mrp-title {
-        color: #ffffff !important;
-        font-size: 12px !important;
-        font-weight: 700 !important;
-        text-align: center !important;
-    }
+    .mrp-title { color: #ffffff !important; font-size: 12px !important; font-weight: 700 !important; text-align: center !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -186,7 +181,7 @@ st.markdown("""
 
 conn = get_connection()
 
-# Funcție Import Corectat 100% din MRPeasy CSV
+# Funcție Import Corectat din MRPeasy CSV
 def process_mrpeasy_csv(df):
     cursor = conn.cursor()
     imported_count = 0
@@ -212,7 +207,6 @@ def process_mrpeasy_csv(df):
             
         um = str(row.get('uom', row.get('unit of measure', row.get('unit', row.get('um', 'pcs'))))).strip()
         
-        # Extragere precisă a locației din coloana "Default storage location"
         loc_raw = row.get('default storage location', row.get('storage location', row.get('location', '-')))
         if pd.notnull(loc_raw) and str(loc_raw).strip() != '' and str(loc_raw).strip().lower() != 'nan':
             storage_loc = str(loc_raw).strip()
@@ -232,10 +226,16 @@ def process_mrpeasy_csv(df):
             min_stock = 0.0
             
         try:
-            val = row.get('cost', row.get('price', row.get('cost price', 0)))
+            val = row.get('cost', row.get('cost price', 0))
             cost_price = float(val) if pd.notnull(val) else 0.0
         except:
             cost_price = 0.0
+
+        try:
+            val = row.get('selling price', row.get('price', 0))
+            selling_price = float(val) if pd.notnull(val) else 0.0
+        except:
+            selling_price = 0.0
 
         cursor.execute("SELECT id FROM items WHERE code = ?", (code,))
         existing = cursor.fetchone()
@@ -243,15 +243,15 @@ def process_mrpeasy_csv(df):
         if existing:
             cursor.execute("""
                 UPDATE items 
-                SET name=?, type=?, unit_of_measure=?, storage_location=?, current_stock=?, min_stock=?, cost_price=?
+                SET name=?, type=?, unit_of_measure=?, storage_location=?, current_stock=?, min_stock=?, cost_price=?, selling_price=?
                 WHERE code=?
-            """, (name, item_type, um, storage_loc, current_stock, min_stock, cost_price, code))
+            """, (name, item_type, um, storage_loc, current_stock, min_stock, cost_price, selling_price, code))
             updated_count += 1
         else:
             cursor.execute("""
-                INSERT INTO items (code, name, type, unit_of_measure, storage_location, current_stock, min_stock, cost_price)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (code, name, item_type, um, storage_loc, current_stock, min_stock, cost_price))
+                INSERT INTO items (code, name, type, unit_of_measure, storage_location, current_stock, min_stock, cost_price, selling_price)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (code, name, item_type, um, storage_loc, current_stock, min_stock, cost_price, selling_price))
             imported_count += 1
 
     conn.commit()
@@ -278,7 +278,7 @@ if current_page == 'Home':
     </div>
     """, unsafe_allow_html=True)
 
-# 6. ECRAN MODUL STOCK
+# 6. ECRAN MODUL STOCK (FILTRE DISPUSE CONFORM POZA 11)
 elif current_page == 'Stock':
     
     total_db_items = conn.cursor().execute("SELECT COUNT(*) FROM items").fetchone()[0]
@@ -314,13 +314,14 @@ elif current_page == 'Stock':
                 current_stock = st.number_input("In stock", min_value=0.0, value=0.0)
                 min_stock = st.number_input("Reorder point", min_value=0.0, value=0.0)
                 cost = st.number_input("Cost (€)", min_value=0.0, value=0.0)
+                selling_price = st.number_input("Selling price (€)", min_value=0.0, value=0.0)
                 
                 if st.form_submit_button("💾 Save"):
                     try:
                         cursor = conn.cursor()
                         cursor.execute(
-                            "INSERT INTO items (code, name, type, unit_of_measure, storage_location, current_stock, min_stock, cost_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                            (code, name, item_type, um, storage_loc, current_stock, min_stock, cost)
+                            "INSERT INTO items (code, name, type, unit_of_measure, storage_location, current_stock, min_stock, cost_price, selling_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            (code, name, item_type, um, storage_loc, current_stock, min_stock, cost, selling_price)
                         )
                         conn.commit()
                         st.success(f"Articolul {code} salvat!")
@@ -332,7 +333,7 @@ elif current_page == 'Stock':
         st.button("↓ PDF", use_container_width=True)
 
     with top_c4:
-        df_export = pd.read_sql_query("SELECT code as 'Part No.', name as 'Part description', unit_of_measure as 'UoM', storage_location as 'Default storage location', cost_price as 'Cost (€)', current_stock as 'In stock' FROM items", conn)
+        df_export = pd.read_sql_query("SELECT code as 'Part No.', name as 'Part description', selling_price as 'Selling price (€)', unit_of_measure as 'UoM', storage_location as 'Default storage location', cost_price as 'Cost (€)', current_stock as 'In stock' FROM items", conn)
         st.download_button("↓ CSV", data=df_export.to_csv(index=False), file_name="items_export.csv", mime="text/csv", use_container_width=True)
 
     with top_c5:
@@ -354,34 +355,52 @@ elif current_page == 'Stock':
 
     st.write("")
 
-    # FILTRELE DIN ANTET DUPĂ LOCAȚIILE REALE
+    # FILTRELE INTEGRATE PE COLOANE EXACT CA ÎN POZA 11
     um_options = ["All"] + [r[0] for r in conn.cursor().execute("SELECT DISTINCT unit_of_measure FROM items WHERE unit_of_measure IS NOT NULL AND unit_of_measure != '' ORDER BY unit_of_measure").fetchall()]
     loc_options = ["All"] + [r[0] for r in conn.cursor().execute("SELECT DISTINCT storage_location FROM items WHERE storage_location IS NOT NULL AND storage_location != '' ORDER BY storage_location").fetchall()]
 
-    f1, f2, f3, f4, f5, f6 = st.columns([2, 3, 2, 1.5, 2, 1.5])
-    
-    with f1:
+    col_part, col_desc, col_sell, col_uom, col_loc, col_cost, col_btn = st.columns([2, 3, 2, 1.2, 2.2, 2, 1.6])
+
+    with col_part:
         f_part_no = st.text_input("Part No. ↓", "", placeholder="Search Part No.", key="f_part_no")
-        
-    with f2:
+
+    with col_desc:
         f_description = st.text_input("Part description", "", placeholder="Search Description", key="f_desc")
-        
-    with f3:
+
+    with col_sell:
+        f_sell_min = st.number_input("Selling price Min (€)", value=0.0, step=1.0, key="f_s_min")
+        f_sell_max = st.number_input("Selling price Max (€)", value=0.0, step=1.0, key="f_s_max")
+
+    with col_uom:
+        f_uom = st.selectbox("UoM", um_options, key="f_uom")
+
+    with col_loc:
+        f_location = st.selectbox("Default storage location", loc_options, key="f_loc")
+
+    with col_cost:
         f_cost_min = st.number_input("Cost Min (€)", value=0.0, step=1.0, key="f_c_min")
         f_cost_max = st.number_input("Cost Max (€)", value=0.0, step=1.0, key="f_c_max")
 
-    with f4:
-        f_uom = st.selectbox("UoM", um_options, key="f_uom")
-
-    with f5:
-        f_location = st.selectbox("Default storage location", loc_options, key="f_loc")
-
-    with f6:
+    with col_btn:
         st.write("")
         st.write("")
         btn_search = st.button("Search", type="primary", use_container_width=True)
+        if st.button("Clear", use_container_width=True):
+            st.rerun()
 
-    query = "SELECT id as ID, code as 'Part No.', name as 'Part description', unit_of_measure as UoM, storage_location as 'Default storage location', cost_price as 'Cost (€)', current_stock as 'In stock', min_stock as 'Reorder point' FROM items WHERE 1=1"
+    # CONSTRUIRE INTEROGARE SQL FILTRATĂ
+    query = """
+        SELECT 
+            id as ID, 
+            code as 'Part No.', 
+            name as 'Part description', 
+            selling_price as 'Selling price (€)', 
+            unit_of_measure as UoM, 
+            storage_location as 'Default storage location', 
+            cost_price as 'Cost (€)', 
+            current_stock as 'In stock'
+        FROM items WHERE 1=1
+    """
     params = []
 
     if f_part_no:
@@ -400,6 +419,14 @@ elif current_page == 'Stock':
         query += " AND storage_location = ?"
         params.append(f_location)
 
+    if f_sell_min > 0:
+        query += " AND selling_price >= ?"
+        params.append(f_sell_min)
+
+    if f_sell_max > 0:
+        query += " AND selling_price <= ?"
+        params.append(f_sell_max)
+
     if f_cost_min > 0:
         query += " AND cost_price >= ?"
         params.append(f_cost_min)
@@ -410,6 +437,7 @@ elif current_page == 'Stock':
 
     df_items = pd.read_sql_query(query, conn, params=params)
 
+    # TABELUL PRINCIPAL
     st.dataframe(df_items, use_container_width=True, height=520, hide_index=True)
 
 # 7. ALTE MODULE
