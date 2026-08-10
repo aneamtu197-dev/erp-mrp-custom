@@ -15,26 +15,34 @@ if not os.path.exists('erp_database.db'):
 def get_connection():
     return sqlite3.connect('erp_database.db')
 
-# Gestionare Navigare prin Parametri URL (Query Params)
-query_params = st.query_params
-current_page = query_params.get("page", "Home")
+# Navigare
+if 'current_page' not in st.session_state:
+    st.session_state['current_page'] = 'Home'
 
-# CSS Custom pentru Replicare Exactă Poza 1 (Grilă Flexibilă HTML cu Carduri Albastre Egale)
+def set_page(page_name):
+    st.session_state['current_page'] = page_name
+
+# CSS Custom - Rezolvare Afișare + Replicare Fidela Poza 1
 st.markdown("""
-    <style>
+<style>
+    /* Fundal general gri deschis */
+    .stApp {
+        background-color: #f4f6f8;
+    }
+    
     /* Ascundere Meniu Lateral Streamlit */
     [data-testid="stSidebar"] { display: none; }
     
-    /* Top Bar MRPeasy Styling */
+    /* Top Bar Styling */
     .top-bar {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 10px 25px;
+        padding: 8px 20px;
         background-color: #ffffff;
         border-bottom: 1px solid #e1e6eb;
         margin-bottom: 25px;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
     }
     .top-bar-left {
         display: flex;
@@ -44,7 +52,7 @@ st.markdown("""
     .logo-text {
         font-size: 20px;
         font-weight: 800;
-        color: #2563EB;
+        color: #1e62d0;
     }
     .top-info {
         font-size: 11px;
@@ -59,128 +67,148 @@ st.markdown("""
         font-weight: 500;
     }
 
-    /* Container Grilă HTML cu carduri egale (Tiles) */
-    .tiles-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-        gap: 12px;
-        padding: 0 10px;
+    /* Egalizare strictă pentru toate coloanele */
+    [data-testid="column"] {
+        flex: 1 1 0% !important;
+        min-width: 0px !important;
     }
 
     /* Stilizare Card-uri Albastre ca în Poza 1 */
-    .tile-card {
-        background-color: #2563eb;
+    div.stButton > button {
+        width: 100% !important;
+        height: 130px !important;
+        background-color: #1e62d0 !important;
         color: #ffffff !important;
-        height: 130px;
-        border-radius: 6px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        text-decoration: none !important;
-        padding: 10px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-        transition: all 0.2s ease-in-out;
-        text-align: center;
+        border-radius: 6px !important;
+        border: none !important;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08) !important;
+        transition: all 0.2s ease-in-out !important;
+        padding: 10px 4px !important;
     }
 
-    .tile-card:hover {
-        background-color: #1d4ed8;
+    /* Text și Iconițe în interiorul card-urilor */
+    div.stButton > button p {
+        font-size: 12px !important;
+        font-weight: 700 !important;
+        color: #ffffff !important;
+        white-space: pre-line !important;
+        line-height: 1.3 !important;
+        text-align: center !important;
+    }
+
+    /* Hover pe Card-uri */
+    div.stButton > button:hover {
+        background-color: #154fb3 !important;
         transform: translateY(-2px);
-        box-shadow: 0 6px 12px rgba(37, 99, 235, 0.25);
+        box-shadow: 0 6px 12px rgba(30, 98, 208, 0.2) !important;
     }
 
-    /* Cerc Alb pentru Iconiță */
-    .icon-circle {
-        width: 42px;
-        height: 42px;
-        background-color: #ffffff;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 20px;
-        margin-bottom: 10px;
-    }
-
-    .tile-title {
-        font-size: 12px;
-        font-weight: 700;
-        color: #ffffff;
-        line-height: 1.2;
-    }
-
-    /* Buton Înapoi la Meniu */
+    /* Back Button */
     .back-btn button {
         height: 38px !important;
         background-color: #4a5568 !important;
-        color: #ffffff !important;
     }
-    </style>
+</style>
 """, unsafe_allow_html=True)
 
 # 1. BARA SUPERIOARĂ (TOP BAR)
 now_str = datetime.now().strftime("%d/%m/%Y %H:%M")
 st.markdown(f"""
-    <div class="top-bar">
-        <div class="top-bar-left">
-            <span class="logo-text">CAN Prod System</span>
-            <span class="top-info">V 10.26539 &nbsp;|&nbsp; {now_str} &nbsp;|&nbsp; Location: ROU</span>
-        </div>
-        <div class="top-bar-right">
-            <span>🌐 ROU</span>
-            <span>➕ CAN PROD COATING</span>
-            <span>👤 General</span>
-            <span>⚙️</span>
-            <span>❓</span>
-        </div>
+<div class="top-bar">
+    <div class="top-bar-left">
+        <span class="logo-text">CAN Prod System</span>
+        <span class="top-info">V 10.26539 &nbsp;|&nbsp; {now_str} &nbsp;|&nbsp; Location: ROU</span>
     </div>
+    <div class="top-bar-right">
+        <span>🌐 ROU</span>
+        <span>➕ CAN PROD COATING</span>
+        <span>👤 General</span>
+        <span>⚙️</span>
+        <span>❓</span>
+    </div>
+</div>
 """, unsafe_allow_html=True)
 
 conn = get_connection()
 
-# 2. ECRANUL PRINCIPAL (HTML TILES PERFECT EGALE)
-if current_page == 'Home':
+# 2. ECRANUL PRINCIPAL (TILES UNIFORME PE 8 COLOANE)
+if st.session_state['current_page'] == 'Home':
     
-    # Definire Module (Iconiță + Titlu + Pagină)
-    modules = [
-        {"icon": "⏱️", "title": "Dashboard", "page": "Dashboard"},
-        {"icon": "📈", "title": "CRM", "page": "CRM"},
-        {"icon": "📅", "title": "My Production Plan", "page": "My_Production_Plan"},
-        {"icon": "📊", "title": "Production Planning", "page": "Production_Planning"},
-        {"icon": "📦", "title": "Stock", "page": "Stock"},
-        {"icon": "🛒", "title": "Procurement", "page": "Procurement"},
-        {"icon": "📁", "title": "Accounting", "page": "Accounting"},
-        {"icon": "⚙️", "title": "Settings", "page": "Settings"},
-        {"icon": "🖥️", "title": "Demo Data and Videos", "page": "Demo"},
-        {"icon": "🎁", "title": "Free Use", "page": "Free_Use"},
-        {"icon": "❓", "title": "Support", "page": "Support"}
-    ]
+    # Rândul 1 de Module
+    col1, col2, col3, col4, col5, col6, col7, col8 = st.columns(8)
+    
+    with col1:
+        if st.button("⏱️\n\nDashboard", key="btn_dash"):
+            set_page("Dashboard")
+            st.rerun()
+            
+    with col2:
+        if st.button("📈\n\nCRM", key="btn_crm"):
+            set_page("CRM")
+            st.rerun()
+            
+    with col3:
+        if st.button("📅\n\nMy Production Plan", key="btn_my_plan"):
+            set_page("My Production Plan")
+            st.rerun()
+            
+    with col4:
+        if st.button("📊\n\nProduction Planning", key="btn_prod_plan"):
+            set_page("Production Planning")
+            st.rerun()
+            
+    with col5:
+        if st.button("📦\n\nStock", key="btn_stock"):
+            set_page("Stock")
+            st.rerun()
+            
+    with col6:
+        if st.button("🛒\n\nProcurement", key="btn_proc"):
+            set_page("Procurement")
+            st.rerun()
+            
+    with col7:
+        if st.button("📁\n\nAccounting", key="btn_acc"):
+            set_page("Accounting")
+            st.rerun()
+            
+    with col8:
+        if st.button("⚙️\n\nSettings", key="btn_sett"):
+            set_page("Settings")
+            st.rerun()
 
-    # Generare Grilă HTML
-    grid_html = '<div class="tiles-grid">'
-    for m in modules:
-        grid_html += f'''
-            <a href="?page={m['page']}" target="_self" class="tile-card">
-                <div class="icon-circle">{m['icon']}</div>
-                <div class="tile-title">{m['title']}</div>
-            </a>
-        '''
-    grid_html += '</div>'
+    st.write("") # Spațiu
     
-    st.markdown(grid_html, unsafe_allow_html=True)
+    # Rândul 2 de Module
+    col_a, col_b, col_c, col_d, col_e, col_f, col_g, col_h = st.columns(8)
+    
+    with col_a:
+        if st.button("🖥️\n\nDemo Data", key="btn_demo"):
+            st.info("Secțiune Demo")
+            
+    with col_b:
+        if st.button("🎁\n\nFree Use", key="btn_free"):
+            st.info("Aplicație Liberă")
+            
+    with col_c:
+        if st.button("❓\n\nSupport", key="btn_supp"):
+            st.info("Suport Tehnic")
 
 # 3. INTERFEȚELE MODULELOR
 else:
     col_back, col_title = st.columns([1, 6])
     with col_back:
-        st.markdown(f'<a href="?page=Home" target="_self" style="text-decoration:none;"><button style="height:38px; background-color:#4a5568; color:white; border:none; border-radius:4px; padding:0 15px; cursor:pointer;">⬅️ Main Menu</button></a>', unsafe_allow_html=True)
+        st.markdown('<div class="back-btn">', unsafe_allow_html=True)
+        if st.button("⬅️ Main Menu"):
+            set_page("Home")
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
     with col_title:
-        st.title(f"Modul: {current_page.replace('_', ' ')}")
+        st.title(f"Modul: {st.session_state['current_page']}")
 
     st.divider()
 
-    if current_page == 'Stock':
+    if st.session_state['current_page'] == 'Stock':
         st.subheader("📦 Nomenclator Articole (Items & Inventory)")
         
         c1, c2 = st.columns([3, 1])
@@ -204,7 +232,7 @@ else:
         df_items = pd.read_sql_query("SELECT id as ID, code as Cod, name as Denumire, type as Tip, unit_of_measure as UM, min_stock as 'Stoc Min', cost_price as Cost FROM items", conn)
         st.dataframe(df_items, use_container_width=True)
 
-    elif current_page == 'Dashboard':
+    elif st.session_state['current_page'] == 'Dashboard':
         st.subheader("📊 Starea Producției și KPIs")
         kpi1, kpi2, kpi3 = st.columns(3)
         total_items = pd.read_sql_query("SELECT COUNT(*) as c FROM items", conn)['c'][0]
@@ -212,7 +240,7 @@ else:
         kpi2.metric("Comenzi Active", "0")
         kpi3.metric("Status Sistem", "ONLINE 🟢")
 
-    elif current_page == 'Settings':
+    elif st.session_state['current_page'] == 'Settings':
         st.subheader("⚙️ Setări & Import CSV MRPeasy / SAGA")
         file = st.file_uploader("Încarcă fișier CSV MRPeasy", type=['csv'])
         if file:
@@ -220,6 +248,6 @@ else:
             st.dataframe(df.head())
 
     else:
-        st.info(f"Modulul **{current_page.replace('_', ' ')}** este pregătit pentru conectarea datelor.")
+        st.info(f"Modulul **{st.session_state['current_page']}** este pregătit pentru conectarea datelor.")
 
 conn.close()
