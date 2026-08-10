@@ -4,15 +4,13 @@ import pandas as pd
 import os
 from datetime import datetime
 
-# Configurare Pagină
+# 1. Configurare Pagină
 st.set_page_config(page_title="CAN Prod System", layout="wide", initial_sidebar_state="collapsed")
 
-# Inițializare și Reparare Automată Bază de Date
+# 2. Reparare și Inițializare Bază de Date
 def init_and_repair_db():
     conn = sqlite3.connect('erp_database.db')
     cursor = conn.cursor()
-
-    # Creare Tabela Items cu Toate Coloanele Necesare
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -25,18 +23,6 @@ def init_and_repair_db():
         cost_price REAL DEFAULT 0.0
     );
     """)
-    
-    # Asigurare că există toate coloanele
-    cursor.execute("PRAGMA table_info(items)")
-    columns = [column[1] for column in cursor.fetchall()]
-    
-    if 'current_stock' not in columns:
-        cursor.execute("ALTER TABLE items ADD COLUMN current_stock REAL DEFAULT 0.0;")
-    if 'min_stock' not in columns:
-        cursor.execute("ALTER TABLE items ADD COLUMN min_stock REAL DEFAULT 0.0;")
-    if 'cost_price' not in columns:
-        cursor.execute("ALTER TABLE items ADD COLUMN cost_price REAL DEFAULT 0.0;")
-        
     conn.commit()
     conn.close()
 
@@ -45,19 +31,19 @@ init_and_repair_db()
 def get_connection():
     return sqlite3.connect('erp_database.db')
 
-# Gestionare Stare Navigare
+# 3. Navigare Session State
 if 'current_page' not in st.session_state:
     st.session_state['current_page'] = 'Home'
 
 def set_page(page_name):
     st.session_state['current_page'] = page_name
 
-# CSS Custom - REPARARE DIMENSIUNI EGALE PĂTRATE ALBASTRE
+# 4. CSS DE FORȚARE DIMENSIUNI EGALE (STIL MRPEASY LAUNCHPAD)
 st.markdown("""
 <style>
     .stApp { background-color: #f8fafc; }
     [data-testid="stSidebar"] { display: none; }
-    
+
     /* Top Bar */
     .top-bar {
         display: flex;
@@ -74,38 +60,38 @@ st.markdown("""
     .top-info { font-size: 11px; color: #94a3b8; }
     .top-bar-right { display: flex; align-items: center; gap: 18px; font-size: 13px; color: #475569; font-weight: 600; }
 
-    /* FORȚARE COLOANE CU LĂȚIMI EXACT EGALE */
-    [data-testid="column"] {
+    /* FORȚARE STRUCTURĂ GRILĂ 8 COLOANE EGALE */
+    div[data-testid="stHorizontalBlock"] > div {
         flex: 1 1 0% !important;
         min-width: 0px !important;
     }
 
-    /* CARDURI ALBASTRE PĂTRATE EGALE */
-    div.stButton > button {
+    /* CARDURI ALBASTRE PĂTRATE STRICT EGALE */
+    div[data-testid="stHorizontalBlock"] button {
         width: 100% !important;
-        height: 140px !important;
+        height: 130px !important;
+        min-height: 130px !important;
+        max-height: 130px !important;
         background-color: #2563eb !important;
-        color: #ffffff !important;
         border-radius: 6px !important;
         border: none !important;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08) !important;
-        transition: all 0.15s ease-in-out !important;
         padding: 5px !important;
     }
 
-    div.stButton > button p {
-        font-size: 13px !important;
-        font-weight: 700 !important;
+    /* Stilizare text alb interior */
+    div[data-testid="stHorizontalBlock"] button p {
         color: #ffffff !important;
+        font-size: 12px !important;
+        font-weight: 700 !important;
         white-space: pre-line !important;
-        line-height: 1.3 !important;
         text-align: center !important;
+        line-height: 1.3 !important;
     }
 
-    div.stButton > button:hover {
+    div[data-testid="stHorizontalBlock"] button:hover {
         background-color: #1d4ed8 !important;
-        transform: translateY(-2px);
-        box-shadow: 0 6px 12px rgba(37, 99, 235, 0.25) !important;
+        box-shadow: 0 6px 12px rgba(37, 99, 235, 0.3) !important;
     }
 
     .back-btn button {
@@ -141,7 +127,6 @@ def process_mrpeasy_csv(df):
     cursor = conn.cursor()
     imported_count = 0
     updated_count = 0
-    
     df.columns = [str(col).strip().lower() for col in df.columns]
     
     for _, row in df.iterrows():
@@ -191,11 +176,10 @@ def process_mrpeasy_csv(df):
     return imported_count, updated_count
 
 
-# 1. ECRAN PRINCIPAL LAUNCHPAD
+# ECRAN PRINCIPAL
 if st.session_state['current_page'] == 'Home':
     
-    # Rândul 1 (8 Card-uri)
-    col1, col2, col3, col4, col5, col6, col7, col8 = st.columns([1,1,1,1,1,1,1,1])
+    col1, col2, col3, col4, col5, col6, col7, col8 = st.columns(8)
     
     with col1:
         if st.button("⏱️\n\nDashboard", key="btn_dash"):
@@ -230,10 +214,9 @@ if st.session_state['current_page'] == 'Home':
             set_page("Settings")
             st.rerun()
 
-    st.write("") # Spațiu
+    st.write("")
     
-    # Rândul 2 (3 Card-uri)
-    col_a, col_b, col_c, col_d, col_e, col_f, col_g, col_h = st.columns([1,1,1,1,1,1,1,1])
+    col_a, col_b, col_c, col_d, col_e, col_f, col_g, col_h = st.columns(8)
     
     with col_a:
         if st.button("🖥️\n\nDemo Data", key="btn_demo"):
@@ -248,7 +231,7 @@ if st.session_state['current_page'] == 'Home':
             set_page("Support")
             st.rerun()
 
-# 2. ECRAN MODUL STOCK (FĂRĂ EROARE SQL)
+# MODUL STOCK
 elif st.session_state['current_page'] == 'Stock':
     col_back, col_title = st.columns([1, 6])
     with col_back:
@@ -316,7 +299,6 @@ elif st.session_state['current_page'] == 'Stock':
                 except Exception as e:
                     st.error(f"Eroare la procesare: {e}")
 
-    # INTEROGARE SQL SIGURĂ
     query = "SELECT id as ID, code as Cod, name as Denumire, type as Tip, unit_of_measure as UM, current_stock as 'Stoc Actual', min_stock as 'Stoc Min', cost_price as 'Cost (RON)' FROM items WHERE 1=1"
     params = []
     
@@ -330,7 +312,6 @@ elif st.session_state['current_page'] == 'Stock':
         
     df_items = pd.read_sql_query(query, conn, params=params)
     
-    # KPI METRICS
     kpi1, kpi2, kpi3, kpi4 = st.columns(4)
     total_repere = len(df_items)
     stoc_critic = len(df_items[df_items['Stoc Actual'] <= df_items['Stoc Min']]) if not df_items.empty else 0
