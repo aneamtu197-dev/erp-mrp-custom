@@ -15,98 +15,107 @@ if not os.path.exists('erp_database.db'):
 def get_connection():
     return sqlite3.connect('erp_database.db')
 
-# Session State pentru Navigare între Module
+# Session State pentru Navigare
 if 'current_page' not in st.session_state:
     st.session_state['current_page'] = 'Home'
 
 def set_page(page_name):
     st.session_state['current_page'] = page_name
 
-# CSS Custom - Replicare Exactă Dimensiuni și Aspect Poza 1
+# CSS Custom - Replicare Fidela Interfață MRPeasy Launchpad
 st.markdown("""
     <style>
-    /* Ascundere Meniu Lateral Streamlit implicit */
+    /* Fundalul general gri deschis ca în MRPeasy */
+    .stApp {
+        background-color: #f4f6f8;
+    }
+    
+    /* Ascundere Meniu Lateral Streamlit */
     [data-testid="stSidebar"] { display: none; }
     
-    /* Top Bar Styling */
+    /* Top Bar MRPeasy Styling */
     .top-bar {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 8px 20px;
-        background-color: #FFFFFF;
-        border-bottom: 1px solid #E2E8F0;
-        margin-bottom: 25px;
-        font-family: Arial, sans-serif;
+        padding: 10px 25px;
+        background-color: #ffffff;
+        border-bottom: 1px solid #e1e6eb;
+        margin-bottom: 30px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
     .top-bar-left {
         display: flex;
         align-items: center;
-        gap: 15px;
+        gap: 12px;
     }
     .logo-text {
-        font-size: 22px;
+        font-size: 20px;
         font-weight: 800;
-        color: #2563EB;
+        color: #1e62d0;
     }
     .top-info {
-        font-size: 12px;
-        color: #64748B;
+        font-size: 11px;
+        color: #8c9ba5;
     }
     .top-bar-right {
         display: flex;
         align-items: center;
-        gap: 20px;
+        gap: 18px;
         font-size: 13px;
-        color: #334155;
-        font-weight: 600;
+        color: #4a5568;
+        font-weight: 500;
     }
 
-    /* Egalizare Lățime Coloane Grilă */
+    /* Grid layout pentru Card-uri */
     [data-testid="column"] {
         flex: 1 1 0% !important;
         min-width: 0px !important;
     }
 
-    /* Stilizare Card-uri Uniforme (Tiles) ca în Poza 1 */
+    /* Card-uri / Butoane stil MRPeasy (Alb albastru/gri) */
     div.stButton > button {
         width: 100% !important;
-        height: 150px !important;
-        background-color: #2563EB !important;
-        color: #FFFFFF !important;
+        height: 140px !important;
+        background-color: #ffffff !important;
+        color: #2d3748 !important;
         border-radius: 8px !important;
-        border: none !important;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
-        transition: all 0.2s ease-in-out !important;
-        padding: 10px !important;
+        border: 1px solid #e2e8f0 !important;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02) !important;
+        transition: all 0.2s ease !important;
+        padding: 15px 5px !important;
     }
     
-    /* Stilizare Text + Iconițe mari în interiorul Butonului */
+    /* Text și Iconițe în interiorul card-urilor */
     div.stButton > button p {
         font-size: 13px !important;
-        font-weight: 700 !important;
-        color: #FFFFFF !important;
-        white-space: pre-line !important; /* Permite trecerea pictogramei pe rând separat */
-        line-height: 1.4 !important;
+        font-weight: 600 !important;
+        color: #2d3748 !important;
+        white-space: pre-line !important;
+        line-height: 1.5 !important;
         text-align: center !important;
     }
 
-    /* Bucle/Hover pe Butoane */
+    /* Cardul selectat / Hover */
     div.stButton > button:hover {
-        background-color: #1D4ED8 !important;
-        transform: translateY(-3px);
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2) !important;
+        border-color: #1e62d0 !important;
+        box-shadow: 0 6px 12px rgba(30, 98, 208, 0.1) !important;
+        transform: translateY(-2px);
     }
 
-    /* Buton Înapoi la Meniu */
+    /* Back Button */
     .back-btn button {
-        height: 40px !important;
-        background-color: #64748B !important;
+        height: 38px !important;
+        background-color: #4a5568 !important;
+        color: #ffffff !important;
+    }
+    .back-btn button p {
+        color: #ffffff !important;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# 1. BARA SUPERIOARĂ (TOP BAR - CAN PROD SYSTEM)
+# 1. BARA SUPERIOARĂ (TOP BAR)
 now_str = datetime.now().strftime("%d/%m/%Y %H:%M")
 st.markdown(f"""
     <div class="top-bar">
@@ -118,13 +127,15 @@ st.markdown(f"""
             <span>🌐 ROU</span>
             <span>➕ CAN PROD COATING</span>
             <span>👤 General</span>
+            <span>⚙️</span>
+            <span>❓</span>
         </div>
     </div>
 """, unsafe_allow_html=True)
 
 conn = get_connection()
 
-# 2. INTERFAȚA LAUNCHPAD (PĂTRATE UNIFORME CA ÎN POZA 1)
+# 2. INTERFAȚA LAUNCHPAD (TILES MRPEASY)
 if st.session_state['current_page'] == 'Home':
     
     # Rândul 1 (8 Card-uri)
@@ -170,13 +181,13 @@ if st.session_state['current_page'] == 'Home':
             set_page("Settings")
             st.rerun()
 
-    st.write("") # Spațiu între rânduri
+    st.write("")
     
-    # Rândul 2 (3 Card-uri aliniate la stânga)
+    # Rândul 2 (3 Card-uri)
     col_a, col_b, col_c, col_d, col_e, col_f, col_g, col_h = st.columns(8)
     
     with col_a:
-        if st.button("🖥️\n\nDemo Data", key="btn_demo"):
+        if st.button("🖥️\n\nDemo Data and Videos", key="btn_demo"):
             st.info("Secțiune Demo")
             
     with col_b:
@@ -187,7 +198,7 @@ if st.session_state['current_page'] == 'Home':
         if st.button("❓\n\nSupport", key="btn_supp"):
             st.info("Suport Tehnic")
 
-# 3. INTERFEȚE MODULE
+# 3. INTERFEȚELE MODULELOR
 else:
     col_back, col_title = st.columns([1, 6])
     with col_back:
