@@ -2,166 +2,239 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 import os
+from datetime import datetime
 from init_db import init_database
 
-# Setare pagină și layout lat (stil MRPeasy)
-st.set_page_config(page_title="Custom MRP System", layout="wide", initial_sidebar_state="collapsed")
+# Configurare Pagină
+st.set_page_config(page_title="MRPeasy Clone", layout="wide", initial_sidebar_state="collapsed")
 
-# Inițializare bază de date
+# Inițializare Bază de Date
 if not os.path.exists('erp_database.db'):
     init_database()
 
 def get_connection():
     return sqlite3.connect('erp_database.db')
 
-# CSS Custom pentru a simula tema vizuală MRPeasy (Top Bar Albastru + Meniu Orizontal)
+# Session State pentru Navigare între Module
+if 'current_page' not in st.session_state:
+    st.session_state['current_page'] = 'Home'
+
+def set_page(page_name):
+    st.session_state['current_page'] = page_name
+
+# CSS Custom pentru Replicarea Fidelă a Interfeței MRPeasy Launchpad
 st.markdown("""
     <style>
-    /* Top Bar Styling */
-    .stAppHeader {
-        background-color: #1E293B;
-    }
-    /* Main Header */
-    .mrp-title {
-        color: #0F172A;
-        font-size: 26px;
-        font-weight: 700;
-        margin-bottom: 5px;
-    }
-    .mrp-subtitle {
-        color: #64748B;
-        font-size: 14px;
-        margin-bottom: 20px;
-    }
-    /* Metric Cards */
-    div[data-testid="stMetricValue"] {
-        font-size: 22px;
-        color: #2563EB;
-        font-weight: bold;
-    }
-    /* Tab Styling */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background-color: #F1F5F9;
-        padding: 8px 12px;
-        border-radius: 8px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        height: 40px;
-        white-space: pre-wrap;
+    /* Ascundere Meniu Lateral Streamlit implicit */
+    [data-testid="stSidebar"] { display: none; }
+    
+    /* Top Bar MRPeasy Styling */
+    .top-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 20px;
         background-color: #FFFFFF;
-        border-radius: 6px;
+        border-bottom: 1px solid #E2E8F0;
+        margin-bottom: 25px;
+        font-family: Arial, sans-serif;
+    }
+    .top-bar-left {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+    .logo-text {
+        font-size: 22px;
+        font-weight: 800;
+        color: #2563EB;
+    }
+    .top-info {
+        font-size: 12px;
+        color: #64748B;
+    }
+    .top-bar-right {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        font-size: 13px;
         color: #334155;
         font-weight: 600;
-        border: 1px solid #CBD5E1;
     }
-    .stTabs [aria-selected="true"] {
+
+    /* Stilizare Butoane / Tiles Albastre */
+    div.stButton > button {
+        width: 100% !important;
+        height: 120px !important;
         background-color: #2563EB !important;
         color: #FFFFFF !important;
-        border: 1px solid #2563EB !important;
+        border-radius: 6px !important;
+        border: none !important;
+        font-size: 16px !important;
+        font-weight: 700 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+        transition: all 0.2s ease-in-out !important;
+    }
+    
+    div.stButton > button:hover {
+        background-color: #1D4ED8 !important;
+        transform: translateY(-2px);
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
+    }
+
+    /* Buton de Întoarcere la Meniu */
+    .back-btn button {
+        height: 40px !important;
+        background-color: #64748B !important;
+        font-size: 14px !important;
     }
     </style>
 """, unsafe_allow_html=True)
 
+# 1. BARA SUPERIOARĂ (TOP BAR - MRPEASY)
+now_str = datetime.now().strftime("%d/%m/%Y %H:%M")
+st.markdown(f"""
+    <div class="top-bar">
+        <div class="top-bar-left">
+            <span class="logo-text">MRPeasy</span>
+            <span class="top-info">V 10.26539 &nbsp;|&nbsp; {now_str} &nbsp;|&nbsp; Location: ROU</span>
+        </div>
+        <div class="top-bar-right">
+            <span>🌐 ROU</span>
+            <span>➕ CAN PROD COATING</span>
+            <span>👤 General</span>
+        </div>
+    </div>
+""", unsafe_allow_html=True)
+
 conn = get_connection()
 
-# Antet Aplicație MRPeasy
-st.markdown('<div class="mrp-title">FACTORY MRP ENGINE</div>', unsafe_allow_html=True)
-st.markdown('<div class="mrp-subtitle">Sistem Integrat de Producție, Stocuri și Ofertare AI</div>', unsafe_allow_html=True)
+# 2. INTERFAȚA DE TIP LAUNCHPAD (EGRANUL PRINCIPAL CU CARD-URI)
+if st.session_state['current_page'] == 'Home':
+    
+    # Rândul 1 de Module
+    col1, col2, col3, col4, col5, col6, col7, col8 = st.columns(8)
+    
+    with col1:
+        if st.button("⏱️\n\nDashboard", key="btn_dash"):
+            set_page("Dashboard")
+            st.rerun()
+            
+    with col2:
+        if st.button("📈\n\nCRM", key="btn_crm"):
+            set_page("CRM")
+            st.rerun()
+            
+    with col3:
+        if st.button("📅\n\nMy Production Plan", key="btn_my_plan"):
+            set_page("My Production Plan")
+            st.rerun()
+            
+    with col4:
+        if st.button("📊\n\nProduction Planning", key="btn_prod_plan"):
+            set_page("Production Planning")
+            st.rerun()
+            
+    with col5:
+        if st.button("📦\n\nStock", key="btn_stock"):
+            set_page("Stock")
+            st.rerun()
+            
+    with col6:
+        if st.button("🛒\n\nProcurement", key="btn_proc"):
+            set_page("Procurement")
+            st.rerun()
+            
+    with col7:
+        if st.button("📁\n\nAccounting", key="btn_acc"):
+            set_page("Accounting")
+            st.rerun()
+            
+    with col8:
+        if st.button("⚙️\n\nSettings", key="btn_sett"):
+            set_page("Settings")
+            st.rerun()
 
-# Meniu Principal Orizontal (Stil MRPeasy Top Menu)
-tab_dashboard, tab_stock, tab_sales, tab_production, tab_procurement, tab_settings = st.tabs([
-    "📊 Dashboard", 
-    "📦 Stock (Items)", 
-    "🛒 Sales (Orders)", 
-    "⚙️ Production (MO)", 
-    "🚚 Procurement (PO)", 
-    "⚙️ Settings & Import"
-])
+    st.write("") # Spațiu
+    
+    # Rândul 2 de Module
+    col_a, col_b, col_c, col_d, col_e, col_f, col_g, col_h = st.columns(8)
+    
+    with col_a:
+        if st.button("🖥️\n\nDemo Data", key="btn_demo"):
+            st.info("Secțiune Demo")
+            
+    with col_b:
+        if st.button("🎁\n\nFree Use", key="btn_free"):
+            st.info("Aplicație Liberă")
+            
+    with col_c:
+        if st.button("❓\n\nSupport", key="btn_supp"):
+            st.info("Suport Tehnic")
 
-# --- 1. DASHBOARD ---
-with tab_dashboard:
-    st.subheader("Control Panel & KPIs")
-    col1, col2, col3, col4 = st.columns(4)
-    
-    total_items = pd.read_sql_query("SELECT COUNT(*) as count FROM items", conn)['count'][0]
-    total_partners = pd.read_sql_query("SELECT COUNT(*) as count FROM partners", conn)['count'][0]
-    
-    col1.metric("Total Articole în Stoc", total_items)
-    col2.metric("Comenzi Producție Active", "0")
-    col3.metric("Parteneri (Clienți/Furnizori)", total_partners)
-    col4.metric("Status Server Cloud", "Online 🟢")
-    
+# 3. INTERFEȚELE PENTRU MODULELE INDIVIDUALE
+else:
+    # Header Pagină + Buton Înapoi
+    col_back, col_title = st.columns([1, 6])
+    with col_back:
+        st.markdown('<div class="back-btn">', unsafe_allow_html=True)
+        if st.button("⬅️ Main Menu"):
+            set_page("Home")
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+    with col_title:
+        st.title(f"Modul: {st.session_state['current_page']}")
+
     st.divider()
-    st.write("### ⏱️ Stare Ordine de Producție (Linii de Asamblare)")
-    st.info("Nu există comenzi de producție în lucru momentan. Lansează o comandă nouă din modulul Sales sau Production.")
 
-# --- 2. STOCK / ITEMS ---
-with tab_stock:
-    st.subheader("Nomenclator Articole (Stock / Items)")
-    
-    sub_col1, sub_col2 = st.columns([3, 1])
-    with sub_col1:
-        st.write("Lista completă de materii prime, subansamble și produse finite.")
-    with sub_col2:
-        with st.popover("➕ Adaugă Articol Nou"):
-            with st.form("add_item_form"):
-                code = st.text_input("Cod Articol (ex: MP-001)")
-                name = st.text_input("Denumire Articol")
-                item_type = st.selectbox("Tip Articol", ["RAW_MATERIAL", "SUBASSEMBLY", "FINISHED_GOOD"])
-                um = st.text_input("Unitate de Măsură", "BUC")
-                min_stock = st.number_input("Stoc Minim", min_value=0.0, value=0.0)
-                cost_price = st.number_input("Cost Estimat (RON)", min_value=0.0, value=0.0)
-                
-                submitted = st.form_submit_button("Salvează")
-                if submitted:
-                    try:
+    # Modulul STOCK
+    if st.session_state['current_page'] == 'Stock':
+        st.subheader("📦 Nomenclator Articole (Items & Inventory)")
+        
+        c1, c2 = st.columns([3, 1])
+        with c2:
+            with st.popover("➕ Adaugă Articol Nou"):
+                with st.form("add_item"):
+                    code = st.text_input("Cod Articol")
+                    name = st.text_input("Denumire Articol")
+                    item_type = st.selectbox("Tip Articol", ["RAW_MATERIAL", "SUBASSEMBLY", "FINISHED_GOOD"])
+                    um = st.text_input("UM", "BUC")
+                    min_stock = st.number_input("Stoc Min", value=0.0)
+                    cost = st.number_input("Cost (RON)", value=0.0)
+                    if st.form_submit_button("Salvează"):
                         cursor = conn.cursor()
-                        cursor.execute(
-                            "INSERT INTO items (code, name, type, unit_of_measure, min_stock, cost_price) VALUES (?, ?, ?, ?, ?, ?)",
-                            (code, name, item_type, um, min_stock, cost_price)
-                        )
+                        cursor.execute("INSERT INTO items (code, name, type, unit_of_measure, min_stock, cost_price) VALUES (?, ?, ?, ?, ?, ?)",
+                                       (code, name, item_type, um, min_stock, cost))
                         conn.commit()
-                        st.success(f"Articol adăugat!")
+                        st.success("Salvat!")
                         st.rerun()
-                    except Exception as e:
-                        st.error(f"Eroare: {e}")
 
-    df_items = pd.read_sql_query("SELECT id as ID, code as Cod, name as Denumire, type as Tip, unit_of_measure as UM, min_stock as 'Stoc Min', cost_price as 'Cost (RON)' FROM items", conn)
-    st.dataframe(df_items, use_container_width=True)
+        df_items = pd.read_sql_query("SELECT id as ID, code as Cod, name as Denumire, type as Tip, unit_of_measure as UM, min_stock as 'Stoc Min', cost_price as Cost FROM items", conn)
+        st.dataframe(df_items, use_container_width=True)
 
-# --- 3. SALES ---
-with tab_sales:
-    st.subheader("Comenzi de Vânzare & Oferte")
-    st.write("Aici se gestionează cererile de ofertă și comenzile primite de la clienți.")
-    st.dataframe(pd.DataFrame(columns=["Nr. Comandă", "Client", "Data", "Valoare (RON)", "Status"]), use_container_width=True)
+    # Modulul DASHBOARD
+    elif st.session_state['current_page'] == 'Dashboard':
+        st.subheader("📊 Starea Producției și KPIs")
+        kpi1, kpi2, kpi3 = st.columns(3)
+        total_items = pd.read_sql_query("SELECT COUNT(*) as c FROM items", conn)['c'][0]
+        kpi1.metric("Total Articole în Stoc", total_items)
+        kpi2.metric("Comenzi Active", "0")
+        kpi3.metric("Status Sistem", "ONLINE 🟢")
 
-# --- 4. PRODUCTION ---
-with tab_production:
-    st.subheader("Lansare și Urmărire Producție (Manufacturing Orders)")
-    st.write("Vizualizare ordine de producție, rețete BOM și stadiu pe secție.")
-    st.dataframe(pd.DataFrame(columns=["MO Code", "Produs", "Cantitate", "Data Final", "Status"]), use_container_width=True)
+    # Modulul SETTINGS & IMPORT
+    elif st.session_state['current_page'] == 'Settings':
+        st.subheader("⚙️ Setări & Import CSV MRPeasy / SAGA")
+        file = st.file_uploader("Încarcă fișier CSV MRPeasy", type=['csv'])
+        if file:
+            df = pd.read_csv(file)
+            st.dataframe(df.head())
 
-# --- 5. PROCUREMENT ---
-with tab_procurement:
-    st.subheader("Comenzi de Achiziție (Purchase Orders)")
-    st.write("Gestiune necesar de materii prime și comenzi către furnizori.")
-    st.dataframe(pd.DataFrame(columns=["PO Code", "Furnizor", "Data Comandă", "Status"]), use_container_width=True)
-
-# --- 6. SETTINGS & IMPORT ---
-with tab_settings:
-    st.subheader("Setări Sistem & Import Date din MRPeasy / SAGA")
-    
-    st.write("#### 📥 Import Rapid din Fișiere CSV")
-    uploaded_file = st.file_content = st.file_uploader("Încarcă fișierul CSV exportat din MRPeasy (Items.csv)", type=['csv'])
-    if uploaded_file is not None:
-        try:
-            df_upload = pd.read_csv(uploaded_file)
-            st.write("Aperçu date din fișier:")
-            st.dataframe(df_upload.head(5))
-            if st.button("Procesează și Salvează în Baza de Date"):
-                st.success("Fișier procesat cu succes!")
-        except Exception as e:
-            st.error(f"Eroare la citirea fișierului: {e}")
+    # Alte module
+    else:
+        st.info(f"Modulul **{st.session_state['current_page']}** este pregătit pentru conectarea datelor specifice.")
 
 conn.close()
