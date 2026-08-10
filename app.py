@@ -67,6 +67,16 @@ def init_and_repair_db():
     );
     """)
 
+    # Operations Table (Production Planning -> Operations - Conform Pozei)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS operations_list (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name VARCHAR(255) NOT NULL,
+        type VARCHAR(100) NOT NULL,
+        hourly_rate REAL DEFAULT 0.0
+    );
+    """)
+
     # Populare implicită
     cursor.execute("SELECT COUNT(*) FROM units_of_measurement")
     if cursor.fetchone()[0] == 0:
@@ -87,6 +97,33 @@ def init_and_repair_db():
         ]
         for num, name in default_groups:
             cursor.execute("INSERT OR IGNORE INTO product_groups (number, name) VALUES (?, ?)", (num, name))
+
+    # Populare implicită Operații (exact ca în poza operatii.JPG)
+    cursor.execute("SELECT COUNT(*) FROM operations_list")
+    if cursor.fetchone()[0] == 0:
+        default_ops = [
+            ('BUCSARE (1)', 'BUCSARE', 20.0),
+            ('Debitare Fierastrau (1)', 'Debitare Fierastrau', 35.0),
+            ('Gaurire/Zencuire (1)', 'Gaurire/Zencuire', 35.0),
+            ('IMPACHETARE (1)', 'IMPACHETARE', 20.0),
+            ('INDOIRE (1)', 'INDOIRE', 100.0),
+            ('Lacuit MDF (1)', 'Lacuit MDF', 1200.0),
+            ('Manipulare (1)', 'Manipulare', 15.0),
+            ('Outsourcing (1)', 'Outsourcing', 60.0),
+            ('Pipe Laser Cutting (1)', 'Pipe_Laser_Cutting', 100.0),
+            ('Plate Laser Cutting (1)', 'Plate_Laser_Cutting', 100.0),
+            ('Roluire_Teava (1)', 'Roluire_Teava', 30.0),
+            ('Slefuire (1)', 'Slefuire', 28.0),
+            ('Slefuire (2)', 'Slefuire', 28.0),
+            ('Virolare_tabla (1)', 'Virolare_Tabla', 30.0),
+            ('VOPSIRE (1)', 'VOPSIRE', 600.0),
+            ('Vopsire Lichida', 'Vopsire Lichida', 420.0),
+            ('Welding (1)', 'Welding', 35.0),
+            ('Welding (2)', 'Welding', 35.0),
+            ('Welding (3)', 'Welding', 35.0)
+        ]
+        for n, t, r in default_ops:
+            cursor.execute("INSERT INTO operations_list (name, type, hourly_rate) VALUES (?, ?, ?)", (n, t, r))
 
     conn.commit()
     conn.close()
@@ -110,6 +147,7 @@ query_params = st.query_params
 current_page = query_params.get("page", "Home")
 current_subtab = query_params.get("subtab", "Items")
 current_setting = query_params.get("setting", "Product_groups")
+prod_tab = query_params.get("prod_tab", "Operations")
 edit_uom_id = query_params.get("uom_id", None)
 
 # 4. CSS STILIZARE REPLICATĂ DUPĂ MRPEASY
@@ -411,7 +449,137 @@ if current_page == 'Home':
     </div>
     """, unsafe_allow_html=True)
 
-# 6. ECRAN MODUL STOCK
+# 6. MODUL PRODUCTION PLANNING (INCLUSIV OPERAȚII CONFORM POZEI operatii.JPG)
+elif current_page == 'Production_Planning':
+    
+    prod_tabs = [
+        ("Operations", "⚙️ Operations"),
+        ("Routings", "🔄 Routings"),
+        ("BOM", "📋 Bills of Materials (BOM)"),
+        ("Production_Orders", "🏭 Production Orders (MO)")
+    ]
+
+    prod_tabs_html = '<div class="mrp-subtabs">'
+    for tab_key, tab_label in prod_tabs:
+        active_class = "mrp-subtab-active" if prod_tab == tab_key else "mrp-subtab"
+        prod_tabs_html += f'<a href="?page=Production_Planning&prod_tab={tab_key}" target="_self" class="{active_class}">{tab_label}</a>'
+    prod_tabs_html += '</div>'
+
+    st.markdown(prod_tabs_html, unsafe_allow_html=True)
+
+    # ------------------ SUBTAB: OPERATIONS (REPLICAT 100% POZA operatii.JPG) ------------------
+    if prod_tab == "Operations":
+        
+        top_op1, top_op2 = st.columns([8, 2])
+        
+        with top_op1:
+            st.markdown("### Operations")
+        
+        with top_op2:
+            with st.popover("➕ Create Operation", use_container_width=True):
+                with st.form("add_op_form"):
+                    op_name = st.text_input("Name (ex: BUCSARE (1))")
+                    op_type = st.text_input("Type (ex: BUCSARE)")
+                    op_rate = st.number_input("Hourly rate (€)", min_value=0.0, value=20.0, step=5.0)
+
+                    if st.form_submit_button("Save"):
+                        if op_name and op_type:
+                            cursor = conn.cursor()
+                            cursor.execute("INSERT INTO operations_list (name, type, hourly_rate) VALUES (?, ?, ?)", (op_name, op_type, op_rate))
+                            conn.commit()
+                            st.success(f"Operația {op_name} a fost salvată!")
+                            st.rerun()
+
+        st.write("")
+
+        # Preluare opțiuni unice de Type pentru filtru
+        type_options = ["All"] + [r[0] for r in conn.cursor().execute("SELECT DISTINCT type FROM operations_list WHERE type IS NOT NULL AND type != '' ORDER BY type").fetchall()]
+
+        # FILTRELE DIN ANTET (CONFORM POZEI)
+        col_f_name, col_f_type, col_f_rate_min, col_f_rate_max, col_f_btn = st.columns([3, 3, 1.5, 1.5, 1])
+
+        with col_f_name:
+            f_op_name = st.text_input("Name ↑", "", placeholder="Filter by Name", key="f_op_n")
+
+        with col_f_type:
+            f_op_type = st.selectbox("Type", type_options, key="f_op_t")
+
+        with col_f_rate_min:
+            f_rate_min = st.number_input("Hourly rate min", value=0.0, step=5.0, key="f_r_min")
+
+        with col_f_rate_max:
+            f_rate_max = st.number_input("max", value=0.0, step=5.0, key="f_r_max")
+
+        with col_f_btn:
+            st.write("")
+            st.write("")
+            btn_op_search = st.button("Search", type="primary", use_container_width=True)
+
+        # Interogare filtrată
+        q_op = "SELECT id, name, type, hourly_rate FROM operations_list WHERE 1=1"
+        p_op = []
+
+        if f_op_name:
+            q_op += " AND name LIKE ?"
+            p_op.append(f"%{f_op_name}%")
+
+        if f_op_type != "All":
+            q_op += " AND type = ?"
+            p_op.append(f_op_type)
+
+        if f_rate_min > 0:
+            q_op += " AND hourly_rate >= ?"
+            p_op.append(f_rate_min)
+
+        if f_rate_max > 0:
+            q_op += " AND hourly_rate <= ?"
+            p_op.append(f_rate_max)
+
+        q_op += " ORDER BY name ASC"
+
+        df_ops = pd.read_sql_query(q_op, conn, params=p_op)
+
+        # AFIȘARE TABELARĂ EDITABILĂ (STIL MRPEASY)
+        st.write("")
+        
+        # Formular de editare/salvare modificări rapide
+        with st.form("edit_operations_form"):
+            for idx, r in df_ops.iterrows():
+                o_id = r['id']
+                o_name = r['name']
+                o_type = r['type']
+                o_rate = r['hourly_rate']
+
+                c1, c2, c3, c4 = st.columns([3, 3, 2, 1])
+                with c1:
+                    updated_name = st.text_input(f"Name #{o_id}", value=o_name, key=f"op_n_{o_id}", label_visibility="collapsed")
+                with c2:
+                    updated_type = st.text_input(f"Type #{o_id}", value=o_type, key=f"op_t_{o_id}", label_visibility="collapsed")
+                with c3:
+                    updated_rate = st.number_input(f"Rate #{o_id}", value=float(o_rate), step=1.0, key=f"op_r_{o_id}", label_visibility="collapsed")
+                with c4:
+                    del_op = st.checkbox("Delete", key=f"op_del_{o_id}")
+
+                conn.cursor().execute("UPDATE operations_list SET name = ?, type = ?, hourly_rate = ? WHERE id = ?", (updated_name, updated_type, updated_rate, o_id))
+                if del_op:
+                    conn.cursor().execute("DELETE FROM operations_list WHERE id = ?", (o_id,))
+
+            save_ops = st.form_submit_button("💾 Salvează Modificările Parametrilor")
+            if save_ops:
+                conn.commit()
+                st.success("Parametrii operațiilor au fost actualizați!")
+                st.rerun()
+
+    else:
+        st.subheader(f"📑 Production Planning - {prod_tab}")
+        st.info(f"Sub-modulul **{prod_tab}** este pregătit pentru conectare.")
+
+# 7. MODUL CRM
+elif current_page == 'CRM':
+    st.title("📊 CRM & Sales Management")
+    st.info("Modulul CRM este pregătit.")
+
+# 8. ECRAN MODUL STOCK
 elif current_page == 'Stock':
     
     total_db_items = conn.cursor().execute("SELECT COUNT(*) FROM items").fetchone()[0]
@@ -818,7 +986,6 @@ elif current_page == 'Stock':
 
                     df_l = pd.read_sql_query(q_l, conn, params=p_l)
 
-                    # FIȘARE TABELARĂ CU BUTON DE ȘTERGERE & POPUP CONFIRMARE
                     st.write("")
                     for _, row in df_l.iterrows():
                         loc_id = row['ID']
