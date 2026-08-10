@@ -67,7 +67,7 @@ def init_and_repair_db():
     );
     """)
 
-    # Operations Table (Production Planning -> Operations - Conform Pozei)
+    # Operations Table
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS operations_list (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -77,13 +77,30 @@ def init_and_repair_db():
     );
     """)
 
-    # Populare implicită
+    # Customer Orders Table (Order and RFQ)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS customer_orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        number VARCHAR(50) UNIQUE NOT NULL,
+        customer_number VARCHAR(50) NOT NULL,
+        customer_name VARCHAR(255) NOT NULL,
+        status VARCHAR(50) DEFAULT 'Confirmed',
+        product_status VARCHAR(50) DEFAULT 'Not booked',
+        invoice_status VARCHAR(50) DEFAULT 'Not invoiced',
+        payment_status VARCHAR(50) DEFAULT 'Not paid',
+        created_date DATE,
+        delivery_date DATE
+    );
+    """)
+
+    # Populare implicită UoM
     cursor.execute("SELECT COUNT(*) FROM units_of_measurement")
     if cursor.fetchone()[0] == 0:
         default_uoms = ['kg', 'l', 'm2', 'Ml', 'Ore', 'pcs', 'SET', 'BUC']
         for u in default_uoms:
             cursor.execute("INSERT OR IGNORE INTO units_of_measurement (name) VALUES (?)", (u,))
 
+    # Populare implicită Groups
     cursor.execute("SELECT COUNT(*) FROM product_groups")
     if cursor.fetchone()[0] == 0:
         default_groups = [
@@ -98,7 +115,7 @@ def init_and_repair_db():
         for num, name in default_groups:
             cursor.execute("INSERT OR IGNORE INTO product_groups (number, name) VALUES (?, ?)", (num, name))
 
-    # Populare implicită Operații (exact ca în poza operatii.JPG)
+    # Populare implicită Operații
     cursor.execute("SELECT COUNT(*) FROM operations_list")
     if cursor.fetchone()[0] == 0:
         default_ops = [
@@ -125,6 +142,34 @@ def init_and_repair_db():
         for n, t, r in default_ops:
             cursor.execute("INSERT INTO operations_list (name, type, hourly_rate) VALUES (?, ?, ?)", (n, t, r))
 
+    # Populare implicită Customer Orders (conform imaginii order and rfq status.JPG)
+    cursor.execute("SELECT COUNT(*) FROM customer_orders")
+    if cursor.fetchone()[0] == 0:
+        default_orders = [
+            ('CO00646', 'CU00036', 'UNILEMN D&G SRL', 'Confirmed', 'Not booked', 'Not invoiced', 'Not paid', '2026-03-17', None),
+            ('CO00731', 'CU00036', 'UNILEMN D&G SRL', 'Confirmed', 'Not booked', 'Not invoiced', 'Not paid', '2026-05-07', None),
+            ('CO00799', 'CU00088', 'Maxim', 'Confirmed', 'Not booked', 'Not invoiced', 'Not paid', '2026-06-17', None),
+            ('CO00817', 'CU00032', 'MODERN DESIGN UK', 'Confirmed', 'Not booked', 'Not invoiced', 'Not paid', '2026-06-30', None),
+            ('CO00834', 'CU00073', 'ELEONORA', 'Confirmed', 'Not booked', 'Not invoiced', 'Not paid', '2026-07-15', '2026-08-21'),
+            ('CO00835', 'CU00014', 'KATVISION VOF', 'Confirmed', 'Not booked', 'Not invoiced', 'Not paid', '2026-07-15', '2026-08-17'),
+            ('CO00843', 'CU00032', 'MODERN DESIGN UK', 'Confirmed', 'Not booked', 'Not invoiced', 'Not paid', '2026-07-20', None),
+            ('CO00844', 'CU00014', 'KATVISION VOF', 'Confirmed', 'Not booked', 'Not invoiced', 'Not paid', '2026-07-21', '2026-08-17'),
+            ('CO00846', 'CU00049', 'Xonix', 'Confirmed', 'Not booked', 'Not invoiced', 'Not paid', '2026-07-24', '2026-07-31'),
+            ('CO00847', 'CU00023', 'Favorit GMBH', 'Confirmed', 'Not booked', 'Not invoiced', 'Not paid', '2026-07-27', '2026-08-17'),
+            ('CO00848', 'CU00008', 'DFL', 'Confirmed', 'Not booked', 'Not invoiced', 'Not paid', '2026-07-27', None),
+            ('CO00850', 'CU00008', 'DFL', 'Confirmed', 'Not booked', 'Not invoiced', 'Not paid', '2026-07-29', None),
+            ('CO00852', 'CU00009', 'Carel', 'Confirmed', 'Not booked', 'Not invoiced', 'Not paid', '2026-07-30', None),
+            ('CO00853', 'CU00068', 'Darog Luck Metal', 'Confirmed', 'Not booked', 'Not invoiced', 'Not paid', '2026-08-04', None),
+            ('CO00854', 'CU00009', 'Carel', 'Confirmed', 'Not booked', 'Not invoiced', 'Not paid', '2026-08-04', None),
+            ('CO00855', 'CU00068', 'Darog Luck Metal', 'Confirmed', 'Not booked', 'Not invoiced', 'Not paid', '2026-08-05', None)
+        ]
+        for num, cnum, cname, st_val, pst, invst, payst, cdt, ddt in default_orders:
+            cursor.execute("""
+                INSERT INTO customer_orders 
+                (number, customer_number, customer_name, status, product_status, invoice_status, payment_status, created_date, delivery_date)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (num, cnum, cname, st_val, pst, invst, payst, cdt, ddt))
+
     conn.commit()
     conn.close()
 
@@ -148,6 +193,8 @@ current_page = query_params.get("page", "Home")
 current_subtab = query_params.get("subtab", "Items")
 current_setting = query_params.get("setting", "Product_groups")
 prod_tab = query_params.get("prod_tab", "Operations")
+rfq_subtab = query_params.get("rfq_subtab", "Customer_orders")
+rfq_inner_tab = query_params.get("rfq_inner", "Orders")
 edit_uom_id = query_params.get("uom_id", None)
 
 # 4. CSS STILIZARE REPLICATĂ DUPĂ MRPEASY
@@ -202,6 +249,16 @@ st.markdown("""
     .mrp-subtab-active { color: #2563eb; border-bottom: 2px solid #2563eb; padding-bottom: 8px; text-decoration: none; }
     .mrp-subtab { color: #64748b; text-decoration: none; }
     .mrp-subtab:hover { color: #1e293b; }
+
+    .mrp-inner-subtabs {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 15px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    .mrp-inner-active { color: #2563eb; border-bottom: 2px solid #2563eb; padding-bottom: 4px; text-decoration: none; }
+    .mrp-inner-tab { color: #64748b; text-decoration: none; }
 
     .settings-sidebar {
         background-color: #f1f5f9;
@@ -265,14 +322,9 @@ st.markdown("""
     }
     .mrp-title { color: #ffffff !important; font-size: 12px !important; font-weight: 700 !important; text-align: center !important; }
 
-    .uom-tooltip {
-        background-color: #1e293b;
-        color: #ffffff;
-        font-size: 11px;
-        padding: 8px 12px;
-        border-radius: 4px;
-        margin-top: 5px;
-        margin-bottom: 15px;
+    .status-badge-red {
+        color: #ef4444;
+        font-weight: 600;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -298,7 +350,7 @@ st.markdown("""
 <div class="mrp-icon-bar">
     <a href="?page=Home" target="_self" class="mrp-icon-item" title="Main Menu">🏠</a>
     <a href="?page=Dashboard" target="_self" class="mrp-icon-item" title="Dashboard">⏱️</a>
-    <a href="?page=CRM" target="_self" class="mrp-icon-item" title="CRM">📊</a>
+    <a href="?page=Order_and_RFQ" target="_self" class="mrp-icon-item" title="Order and RFQ">📊</a>
     <a href="?page=My_Production_Plan" target="_self" class="mrp-icon-item" title="My Production Plan">📅</a>
     <a href="?page=Production_Planning" target="_self" class="mrp-icon-item" title="Production Planning">📑</a>
     <a href="?page=Stock" target="_self" class="mrp-icon-item" title="Stock">📦</a>
@@ -434,7 +486,7 @@ if current_page == 'Home':
     st.markdown("""
     <div class="mrp-launchpad">
         <a href="?page=Dashboard" target="_self" class="mrp-card"><div class="mrp-circle">⏱️</div><div class="mrp-title">Dashboard</div></a>
-        <a href="?page=CRM" target="_self" class="mrp-card"><div class="mrp-circle">📊</div><div class="mrp-title">CRM</div></a>
+        <a href="?page=Order_and_RFQ" target="_self" class="mrp-card"><div class="mrp-circle">📊</div><div class="mrp-title">Order and RFQ</div></a>
         <a href="?page=My_Production_Plan" target="_self" class="mrp-card"><div class="mrp-circle">📅</div><div class="mrp-title">My Production Plan</div></a>
         <a href="?page=Production_Planning" target="_self" class="mrp-card"><div class="mrp-circle">📑</div><div class="mrp-title">Production Planning</div></a>
         <a href="?page=Stock" target="_self" class="mrp-card"><div class="mrp-circle">📦</div><div class="mrp-title">Stock</div></a>
@@ -449,7 +501,225 @@ if current_page == 'Home':
     </div>
     """, unsafe_allow_html=True)
 
-# 6. MODUL PRODUCTION PLANNING (INCLUSIV OPERAȚII CONFORM POZEI operatii.JPG)
+# 6. MODUL ORDER AND RFQ (REPLICAT EXACT POZA order and rfq status.JPG)
+elif current_page == 'Order_and_RFQ' or current_page == 'CRM':
+    
+    rfq_subtabs = [
+        ("Customer_orders", "Customer orders"),
+        ("Customers", "Customers"),
+        ("Todays_contacts", "Today's contacts"),
+        ("Invoices", "Invoices"),
+        ("Pricelists", "Pricelists"),
+        ("Cash_flow", "Cash flow forecast"),
+        ("Statistics", "Statistics"),
+        ("Sales_management", "Sales management"),
+        ("Customer_returns", "Customer returns (RMAs)")
+    ]
+
+    rfq_html = '<div class="mrp-subtabs">'
+    for tab_key, tab_label in rfq_subtabs:
+        active_class = "mrp-subtab-active" if rfq_subtab == tab_key else "mrp-subtab"
+        rfq_html += f'<a href="?page=Order_and_RFQ&rfq_subtab={tab_key}" target="_self" class="{active_class}">{tab_label}</a>'
+    rfq_html += '</div>'
+
+    st.markdown(rfq_html, unsafe_allow_html=True)
+
+    # ------------------ SUBTAB: CUSTOMER ORDERS (POZA order and rfq status.JPG) ------------------
+    if rfq_subtab == "Customer_orders":
+        
+        # Sub-tabs secundare: Customer orders | Items
+        st.markdown(f"""
+        <div class="mrp-inner-subtabs">
+            <a href="?page=Order_and_RFQ&rfq_subtab=Customer_orders&rfq_inner=Orders" target="_self" class="{"mrp-inner-active" if rfq_inner_tab=="Orders" else "mrp-inner-tab"}">Customer orders</a>
+            <a href="?page=Order_and_RFQ&rfq_subtab=Customer_orders&rfq_inner=Items" target="_self" class="{"mrp-inner-active" if rfq_inner_tab=="Items" else "mrp-inner-tab"}">Items</a>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if rfq_inner_tab == "Orders":
+            top_co1, top_co2, top_co3, top_co4 = st.columns([3, 5, 1, 1])
+            
+            with top_co1:
+                st.markdown("### Customer orders")
+            
+            with top_co2:
+                with st.popover("➕ Create", use_container_width=False):
+                    with st.form("add_customer_order_form"):
+                        st.subheader("Creare Comandă Client / Oferta RFQ")
+                        co_num = st.text_input("Number (ex: CO00856)")
+                        co_cust_num = st.text_input("Customer number (ex: CU00009)")
+                        co_cust_name = st.text_input("Customer name")
+                        co_status = st.selectbox("Status", ["Confirmed", "Quoted", "Cancelled"])
+                        co_prod_st = st.selectbox("Product status", ["Not booked", "Booked", "Shipped"])
+                        co_inv_st = st.selectbox("Invoice status", ["Not invoiced", "Invoiced", "Partially invoiced"])
+                        co_pay_st = st.selectbox("Payment status", ["Not paid", "Paid", "Partially paid"])
+                        co_cdt = st.date_input("Created Date", datetime.now())
+                        co_ddt = st.date_input("Delivery Date", datetime.now())
+
+                        if st.form_submit_button("💾 Save Customer Order"):
+                            try:
+                                cursor = conn.cursor()
+                                cursor.execute("""
+                                    INSERT INTO customer_orders 
+                                    (number, customer_number, customer_name, status, product_status, invoice_status, payment_status, created_date, delivery_date)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                """, (co_num, co_cust_num, co_cust_name, co_status, co_prod_st, co_inv_st, co_pay_st, co_cdt.strftime("%Y-%m-%d"), co_ddt.strftime("%Y-%m-%d")))
+                                conn.commit()
+                                st.success("Comanda a fost salvată!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Eroare: {e}")
+
+            with top_co3:
+                st.button("↓ PDF", use_container_width=True)
+
+            with top_co4:
+                df_co_exp = pd.read_sql_query("SELECT number as 'Number', customer_number as 'Customer number', customer_name as 'Customer name', status as Status, product_status as 'Product status', invoice_status as 'Invoice status', payment_status as 'Payment status', created_date as Created, delivery_date as 'Delivery date' FROM customer_orders", conn)
+                st.download_button("↓ CSV", data=df_co_exp.to_csv(index=False), file_name="customer_orders.csv", mime="text/csv", use_container_width=True)
+
+            st.write("")
+
+            # FILTRELE DIN ANTET (CONFORM POZEI EXACTE)
+            col_co_num, col_co_cnum, col_co_cname, col_co_st, col_co_pst, col_co_inv, col_co_pay, col_co_cdt, col_co_ddt, col_co_btn = st.columns([1.5, 1.5, 2.5, 1.2, 1.5, 1.2, 1.2, 1.5, 1.5, 1.2])
+
+            with col_co_num:
+                f_co_num = st.text_input("Number ↑", "", placeholder="Filter Number", key="f_co_num")
+
+            with col_co_cnum:
+                f_co_cnum = st.text_input("Customer number", "", placeholder="Filter Cust No.", key="f_co_cnum")
+
+            with col_co_cname:
+                f_co_cname = st.text_input("Customer name", "", placeholder="Filter Cust Name", key="f_co_cname")
+
+            with col_co_st:
+                f_co_st = st.selectbox("Status", ["All", "Confirmed", "Quoted", "Cancelled"], key="f_co_st")
+
+            with col_co_pst:
+                f_co_pst = st.selectbox("Product status", ["All", "Not booked", "Booked", "Shipped"], key="f_co_pst")
+
+            with col_co_inv:
+                f_co_inv = st.selectbox("Invoice status", ["All", "Not invoiced", "Invoiced"], key="f_co_inv")
+
+            with col_co_pay:
+                f_co_pay = st.selectbox("Payment status", ["All", "Not paid", "Paid"], key="f_co_pay")
+
+            with col_co_cdt:
+                st.caption("Created min/max")
+
+            with col_co_ddt:
+                st.caption("Delivery min/max")
+
+            with col_co_btn:
+                btn_co_search = st.button("Search", type="primary", use_container_width=True)
+
+            # INTEROGARE SQL FILTRATĂ
+            q_co = "SELECT id, number, customer_number, customer_name, status, product_status, invoice_status, payment_status, strftime('%m/%d/%Y', created_date) as created_fmt, strftime('%m/%d/%Y', delivery_date) as delivery_fmt FROM customer_orders WHERE 1=1"
+            p_co = []
+
+            if f_co_num:
+                q_co += " AND number LIKE ?"
+                p_co.append(f"%{f_co_num}%")
+
+            if f_co_cnum:
+                q_co += " AND customer_number LIKE ?"
+                p_co.append(f"%{f_co_cnum}%")
+
+            if f_co_cname:
+                q_co += " AND customer_name LIKE ?"
+                p_co.append(f"%{f_co_cname}%")
+
+            if f_co_st != "All":
+                q_co += " AND status = ?"
+                p_co.append(f_co_st)
+
+            if f_co_pst != "All":
+                q_co += " AND product_status = ?"
+                p_co.append(f_co_pst)
+
+            if f_co_inv != "All":
+                q_co += " AND invoice_status = ?"
+                p_co.append(f_co_inv)
+
+            if f_co_pay != "All":
+                q_co += " AND payment_status = ?"
+                p_co.append(f_co_pay)
+
+            q_co += " ORDER BY id ASC"
+
+            df_co_res = pd.read_sql_query(q_co, conn, params=p_co)
+
+            # AFIȘARE TABELARĂ 100% IDENTICĂ CU POZA
+            st.write(f"**Total: {len(df_co_res)} orders**")
+
+            rows_co_html = ""
+            for idx, r in df_co_res.iterrows():
+                rows_co_html += f"""
+                <tr>
+                    <td>{idx+1}</td>
+                    <td><b>{r['number']}</b></td>
+                    <td>{r['customer_number']}</td>
+                    <td>{r['customer_name']}</td>
+                    <td>{r['status']}</td>
+                    <td class="status-badge-red">{r['product_status']}</td>
+                    <td class="status-badge-red">{r['invoice_status']}</td>
+                    <td class="status-badge-red">{r['payment_status']}</td>
+                    <td>{r['created_fmt'] if r['created_fmt'] else '-'}</td>
+                    <td>{r['delivery_fmt'] if r['delivery_fmt'] else '-'}</td>
+                    <td style="text-align: right;">✏️</td>
+                    <td style="text-align: right;">📊</td>
+                </tr>
+                """
+
+            iframe_co_html = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+            <style>
+                * {{ box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }}
+                body {{ background-color: #ffffff; padding: 0; }}
+                .mrp-table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
+                .mrp-table th {{ background-color: #e2e8f0; color: #475569; font-weight: 600; padding: 8px 12px; text-align: left; border-bottom: 1px solid #cbd5e1; }}
+                .mrp-table td {{ padding: 8px 12px; border-bottom: 1px solid #f1f5f9; color: #1e293b; }}
+                .mrp-table tr:hover {{ background-color: #f8fafc; }}
+                .status-badge-red {{ color: #ef4444; font-weight: 600; }}
+            </style>
+            </head>
+            <body>
+                <table class="mrp-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 30px;">+</th>
+                            <th>Number ↑</th>
+                            <th>Customer number</th>
+                            <th>Customer name</th>
+                            <th>Status</th>
+                            <th>Product status</th>
+                            <th>Invoice status</th>
+                            <th>Payment status</th>
+                            <th>Created</th>
+                            <th>Delivery date</th>
+                            <th style="width: 30px;">🗑️</th>
+                            <th style="width: 30px;">+</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows_co_html}
+                    </tbody>
+                </table>
+            </body>
+            </html>
+            """
+
+            calc_h = max(250, len(df_co_res) * 38 + 50)
+            components.html(iframe_co_html, height=calc_h, scrolling=True)
+
+        else:
+            st.info("Afișare articole comenzi clienți.")
+
+    else:
+        st.subheader(f"📊 Order and RFQ - {rfq_subtab.replace('_', ' ')}")
+        st.info(f"Sub-modulul **{rfq_subtab.replace('_', ' ')}** este pregătit.")
+
+# 7. MODUL PRODUCTION PLANNING
 elif current_page == 'Production_Planning':
     
     prod_tabs = [
@@ -467,9 +737,7 @@ elif current_page == 'Production_Planning':
 
     st.markdown(prod_tabs_html, unsafe_allow_html=True)
 
-    # ------------------ SUBTAB: OPERATIONS (REPLICAT 100% POZA operatii.JPG) ------------------
     if prod_tab == "Operations":
-        
         top_op1, top_op2 = st.columns([8, 2])
         
         with top_op1:
@@ -492,10 +760,8 @@ elif current_page == 'Production_Planning':
 
         st.write("")
 
-        # Preluare opțiuni unice de Type pentru filtru
         type_options = ["All"] + [r[0] for r in conn.cursor().execute("SELECT DISTINCT type FROM operations_list WHERE type IS NOT NULL AND type != '' ORDER BY type").fetchall()]
 
-        # FILTRELE DIN ANTET (CONFORM POZEI)
         col_f_name, col_f_type, col_f_rate_min, col_f_rate_max, col_f_btn = st.columns([3, 3, 1.5, 1.5, 1])
 
         with col_f_name:
@@ -515,7 +781,6 @@ elif current_page == 'Production_Planning':
             st.write("")
             btn_op_search = st.button("Search", type="primary", use_container_width=True)
 
-        # Interogare filtrată
         q_op = "SELECT id, name, type, hourly_rate FROM operations_list WHERE 1=1"
         p_op = []
 
@@ -539,10 +804,8 @@ elif current_page == 'Production_Planning':
 
         df_ops = pd.read_sql_query(q_op, conn, params=p_op)
 
-        # AFIȘARE TABELARĂ EDITABILĂ (STIL MRPEASY)
         st.write("")
         
-        # Formular de editare/salvare modificări rapide
         with st.form("edit_operations_form"):
             for idx, r in df_ops.iterrows():
                 o_id = r['id']
@@ -573,11 +836,6 @@ elif current_page == 'Production_Planning':
     else:
         st.subheader(f"📑 Production Planning - {prod_tab}")
         st.info(f"Sub-modulul **{prod_tab}** este pregătit pentru conectare.")
-
-# 7. MODUL CRM
-elif current_page == 'CRM':
-    st.title("📊 CRM & Sales Management")
-    st.info("Modulul CRM este pregătit.")
 
 # 8. ECRAN MODUL STOCK
 elif current_page == 'Stock':
@@ -1064,7 +1322,7 @@ elif current_page == 'Stock':
         st.subheader(f"📦 {current_subtab.replace('_', ' ')}")
         st.info(f"Sub-modulul **{current_subtab.replace('_', ' ')}** este pregătit pentru conectare.")
 
-# 7. ALTE MODULE
+# 9. ALTE MODULE
 else:
     st.title(f"Modul: {current_page.replace('_', ' ')}")
     st.divider()
