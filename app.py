@@ -31,11 +31,11 @@ init_and_repair_db()
 def get_connection():
     return sqlite3.connect('erp_database.db')
 
-# 3. Preluare Pagină din URL Query Parameters
+# 3. Preluare Pagină Curentă din URL Query Parameters
 query_params = st.query_params
 current_page = query_params.get("page", "Home")
 
-# 4. CSS STILIZARE PRECISĂ IDENTICĂ POZA 1
+# 4. CSS STILIZARE POZA 1
 st.markdown("""
 <style>
     .stApp { background-color: #ffffff; }
@@ -117,11 +117,6 @@ st.markdown("""
         line-height: 1.2 !important;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
     }
-
-    .back-btn button {
-        height: 38px !important;
-        background-color: #475569 !important;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -145,7 +140,7 @@ st.markdown(f"""
 
 conn = get_connection()
 
-# Funcție Import MRPeasy CSV
+# Funcție Dedicată de Parser & Import MRPeasy CSV
 def process_mrpeasy_csv(df):
     cursor = conn.cursor()
     imported_count = 0
@@ -153,30 +148,45 @@ def process_mrpeasy_csv(df):
     df.columns = [str(col).strip().lower() for col in df.columns]
     
     for _, row in df.iterrows():
-        code = str(row.get('part number', row.get('code', row.get('cod', '')))).strip()
+        # Identificare Cod (Part No. în MRPeasy)
+        code = str(row.get('part no.', row.get('part number', row.get('code', row.get('cod', ''))))).strip()
         if not code or code == 'nan':
             continue
             
-        name = str(row.get('description', row.get('name', row.get('denumire', code)))).strip()
+        # Identificare Denumire (Part description în MRPeasy)
+        name = str(row.get('part description', row.get('description', row.get('name', row.get('denumire', code))))).strip()
         
-        type_val = str(row.get('group', row.get('type', row.get('tip', 'RAW_MATERIAL')))).upper()
-        if 'RAW' in type_val or 'MATERIA' in type_val:
+        # Identificare Tip Articol (Group number / Is procured item)
+        group = str(row.get('group number', row.get('group name', row.get('group', '')))).upper()
+        is_procured = row.get('is procured item', 0)
+        
+        if 'BUY' in group or is_procured == 1 or 'MATERIA' in group:
             item_type = 'RAW_MATERIAL'
-        elif 'SUB' in type_val or 'ANSAMBLU' in type_val:
+        elif 'SUB' in group or 'ANSAMBLU' in group:
             item_type = 'SUBASSEMBLY'
         else:
             item_type = 'FINISHED_GOOD'
             
-        um = str(row.get('unit', row.get('unit of measure', row.get('um', 'BUC')))).strip()
+        # Identificare UM (UoM în MRPeasy)
+        um = str(row.get('uom', row.get('unit of measure', row.get('unit', row.get('um', 'pcs'))))).strip()
         
-        try: current_stock = float(row.get('in stock', row.get('available', row.get('stoc', 0))))
-        except: current_stock = 0.0
+        try:
+            val = row.get('in stock', row.get('available', row.get('stoc', 0)))
+            current_stock = float(val) if pd.notnull(val) else 0.0
+        except:
+            current_stock = 0.0
             
-        try: min_stock = float(row.get('reorder point', row.get('min stock', row.get('stoc min', 0))))
-        except: min_stock = 0.0
+        try:
+            val = row.get('reorder point', row.get('min stock', row.get('stoc min', 0)))
+            min_stock = float(val) if pd.notnull(val) else 0.0
+        except:
+            min_stock = 0.0
             
-        try: cost_price = float(row.get('cost', row.get('price', row.get('cost price', 0))))
-        except: cost_price = 0.0
+        try:
+            val = row.get('cost', row.get('price', row.get('cost price', 0)))
+            cost_price = float(val) if pd.notnull(val) else 0.0
+        except:
+            cost_price = 0.0
 
         cursor.execute("SELECT id FROM items WHERE code = ?", (code,))
         existing = cursor.fetchone()
@@ -199,10 +209,8 @@ def process_mrpeasy_csv(df):
     return imported_count, updated_count
 
 
-# 5. ECRAN PRINCIPAL (GRID HTML CURAT 100% POZA 1)
+# 5. ECRAN PRINCIPAL
 if current_page == 'Home':
-    
-    # Rândul 1 (8 Carduri)
     st.markdown("""
     <div class="mrp-launchpad">
         <a href="?page=Dashboard" target="_self" class="mrp-card"><div class="mrp-circle">⏱️</div><div class="mrp-title">Dashboard</div></a>
@@ -271,7 +279,7 @@ elif current_page == 'Stock':
         st.write("")
         with st.popover("📥 Import CSV MRPeasy", use_container_width=True):
             st.subheader("Import Stocuri din MRPeasy")
-            csv_file = st.file_uploader("Încarcă fișierul Items.csv", type=['csv'])
+            csv_file = st.file_uploader("Încarcă fișierul articles.csv", type=['csv'])
             if csv_file is not None:
                 try:
                     df_upload = pd.read_csv(csv_file)
@@ -280,7 +288,7 @@ elif current_page == 'Stock':
                     
                     if st.button("🚀 Execută Importul"):
                         added, updated = process_mrpeasy_csv(df_upload)
-                        st.success(f"Import finalizat! Adăugate: {added}, Actualizate: {updated}.")
+                        st.success(f"Import finalizat cu succes! Adăugate: {added} repere noi, Actualizate: {updated} repere.")
                         st.rerun()
                 except Exception as e:
                     st.error(f"Eroare la procesare: {e}")
