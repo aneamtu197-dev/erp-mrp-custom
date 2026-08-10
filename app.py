@@ -7,7 +7,7 @@ from datetime import datetime
 # 1. Configurare Pagină
 st.set_page_config(page_title="CAN Prod System", layout="wide", initial_sidebar_state="collapsed")
 
-# 2. Reparare și Inițializare Bază de Date
+# 2. Reparare și Inițializare Bază de Date (cu adăugare storage_location)
 def init_and_repair_db():
     conn = sqlite3.connect('erp_database.db')
     cursor = conn.cursor()
@@ -18,11 +18,19 @@ def init_and_repair_db():
         name VARCHAR(255) NOT NULL,
         type VARCHAR(50) DEFAULT 'RAW_MATERIAL',
         unit_of_measure VARCHAR(20) DEFAULT 'pcs',
+        storage_location VARCHAR(100) DEFAULT 'General',
         current_stock REAL DEFAULT 0.0,
         min_stock REAL DEFAULT 0.0,
         cost_price REAL DEFAULT 0.0
     );
     """)
+    
+    # Verificare și adăugare coloană dacă baza de date există deja
+    cursor.execute("PRAGMA table_info(items)")
+    columns = [column[1] for column in cursor.fetchall()]
+    if 'storage_location' not in columns:
+        cursor.execute("ALTER TABLE items ADD COLUMN storage_location VARCHAR(100) DEFAULT 'General';")
+        
     conn.commit()
     conn.close()
 
@@ -31,11 +39,11 @@ init_and_repair_db()
 def get_connection():
     return sqlite3.connect('erp_database.db')
 
-# 3. Preluare Pagină din URL Query Parameters
+# 3. Preluare Pagină din URL
 query_params = st.query_params
 current_page = query_params.get("page", "Home")
 
-# 4. CSS CUSTOM PENTRU STILIZARE REPLICATĂ EXACT DIN POZA 10
+# 4. CSS STILIZARE REPLICATĂ DUPĂ POZA 10
 st.markdown("""
 <style>
     .stApp { background-color: #f8fafc; }
@@ -211,6 +219,9 @@ def process_mrpeasy_csv(df):
             
         um = str(row.get('uom', row.get('unit of measure', row.get('unit', row.get('um', 'pcs'))))).strip()
         
+        loc_val = str(row.get('default storage location', row.get('storage location', row.get('location', 'General')))).strip()
+        storage_loc = loc_val if loc_val and loc_val != 'nan' else 'General'
+        
         try:
             val = row.get('in stock', row.get('available', row.get('stoc', 0)))
             current_stock = float(val) if pd.notnull(val) else 0.0
@@ -235,22 +246,22 @@ def process_mrpeasy_csv(df):
         if existing:
             cursor.execute("""
                 UPDATE items 
-                SET name=?, type=?, unit_of_measure=?, current_stock=?, min_stock=?, cost_price=?
+                SET name=?, type=?, unit_of_measure=?, storage_location=?, current_stock=?, min_stock=?, cost_price=?
                 WHERE code=?
-            """, (name, item_type, um, current_stock, min_stock, cost_price, code))
+            """, (name, item_type, um, storage_loc, current_stock, min_stock, cost_price, code))
             updated_count += 1
         else:
             cursor.execute("""
-                INSERT INTO items (code, name, type, unit_of_measure, current_stock, min_stock, cost_price)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (code, name, item_type, um, current_stock, min_stock, cost_price))
+                INSERT INTO items (code, name, type, unit_of_measure, storage_location, current_stock, min_stock, cost_price)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (code, name, item_type, um, storage_loc, current_stock, min_stock, cost_price))
             imported_count += 1
 
     conn.commit()
     return imported_count, updated_count
 
 
-# 5. ECRAN PRINCIPAL (HOME LAUNCHPAD)
+# 5. ECRAN PRINCIPAL
 if current_page == 'Home':
     st.markdown("""
     <div class="mrp-launchpad">
@@ -270,13 +281,11 @@ if current_page == 'Home':
     </div>
     """, unsafe_allow_html=True)
 
-# 6. ECRAN MODUL STOCK (REPLICAT EXACT CA ÎN POZA 10)
+# 6. ECRAN MODUL STOCK (REPLICAT EXACT POZA 10 CU STORAGE LOCATION)
 elif current_page == 'Stock':
     
-    # Calcul număr total de articole pentru titlu
     total_db_items = conn.cursor().execute("SELECT COUNT(*) FROM items").fetchone()[0]
 
-    # Sub-meniul MRPeasy din Poza 10
     st.markdown(f"""
     <div class="mrp-subtabs">
         <a href="#" class="mrp-subtab-active">Items ({total_db_items})</a>
@@ -291,7 +300,6 @@ elif current_page == 'Stock':
     </div>
     """, unsafe_allow_html=True)
 
-    # Bara de Titlu + Butoane Acțiuni Top (Poza 10)
     top_c1, top_c2, top_c3, top_c4, top_c5 = st.columns([2, 5, 1, 1, 2])
     
     with top_c1:
@@ -305,6 +313,7 @@ elif current_page == 'Stock':
                 name = st.text_input("Part description")
                 item_type = st.selectbox("Group", ["RAW_MATERIAL", "SUBASSEMBLY", "FINISHED_GOOD"])
                 um = st.text_input("UoM", "pcs")
+                storage_loc = st.text_input("Default storage location", "General")
                 current_stock = st.number_input("In stock", min_value=0.0, value=0.0)
                 min_stock = st.number_input("Reorder point", min_value=0.0, value=0.0)
                 cost = st.number_input("Cost (€)", min_value=0.0, value=0.0)
@@ -313,8 +322,8 @@ elif current_page == 'Stock':
                     try:
                         cursor = conn.cursor()
                         cursor.execute(
-                            "INSERT INTO items (code, name, type, unit_of_measure, current_stock, min_stock, cost_price) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                            (code, name, item_type, um, current_stock, min_stock, cost)
+                            "INSERT INTO items (code, name, type, unit_of_measure, storage_location, current_stock, min_stock, cost_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                            (code, name, item_type, um, storage_loc, current_stock, min_stock, cost)
                         )
                         conn.commit()
                         st.success(f"Articolul {code} salvat!")
@@ -326,8 +335,7 @@ elif current_page == 'Stock':
         st.button("↓ PDF", use_container_width=True)
 
     with top_c4:
-        # Preia datele filtrate pentru export CSV
-        df_export = pd.read_sql_query("SELECT code as 'Part No.', name as 'Part description', unit_of_measure as 'UoM', cost_price as 'Cost (€)', current_stock as 'In stock' FROM items", conn)
+        df_export = pd.read_sql_query("SELECT code as 'Part No.', name as 'Part description', unit_of_measure as 'UoM', storage_location as 'Default storage location', cost_price as 'Cost (€)', current_stock as 'In stock' FROM items", conn)
         st.download_button("↓ CSV", data=df_export.to_csv(index=False), file_name="items_export.csv", mime="text/csv", use_container_width=True)
 
     with top_c5:
@@ -349,8 +357,9 @@ elif current_page == 'Stock':
 
     st.write("")
 
-    # FILTRELE DIN ANTETUL TABELULUI (REPLICARE EXACTĂ POZA 10)
+    # FILTRELE DIN ANTET (MAPPING IDENTIC POZA 10)
     um_options = ["All"] + [r[0] for r in conn.cursor().execute("SELECT DISTINCT unit_of_measure FROM items WHERE unit_of_measure IS NOT NULL AND unit_of_measure != ''").fetchall()]
+    loc_options = ["All"] + [r[0] for r in conn.cursor().execute("SELECT DISTINCT storage_location FROM items WHERE storage_location IS NOT NULL AND storage_location != ''").fetchall()]
 
     f1, f2, f3, f4, f5, f6 = st.columns([2, 3, 2, 1.5, 2, 1.5])
     
@@ -368,7 +377,7 @@ elif current_page == 'Stock':
         f_uom = st.selectbox("UoM", um_options, key="f_uom")
 
     with f5:
-        f_stock_status = st.selectbox("Stock Filter", ["All", "In Stock (>0)", "Critical (<=Min)", "Zero Stock (=0)"], key="f_st")
+        f_location = st.selectbox("Default storage location", loc_options, key="f_loc")
 
     with f6:
         st.write("")
@@ -376,7 +385,7 @@ elif current_page == 'Stock':
         btn_search = st.button("Search", type="primary", use_container_width=True)
 
     # CONSTRUIRE INTEROGARE SQL FILTRATĂ
-    query = "SELECT id as ID, code as 'Part No.', name as 'Part description', unit_of_measure as UoM, cost_price as 'Cost (€)', current_stock as 'In stock', min_stock as 'Reorder point' FROM items WHERE 1=1"
+    query = "SELECT id as ID, code as 'Part No.', name as 'Part description', unit_of_measure as UoM, storage_location as 'Default storage location', cost_price as 'Cost (€)', current_stock as 'In stock', min_stock as 'Reorder point' FROM items WHERE 1=1"
     params = []
 
     if f_part_no:
@@ -391,6 +400,10 @@ elif current_page == 'Stock':
         query += " AND unit_of_measure = ?"
         params.append(f_uom)
 
+    if f_location != "All":
+        query += " AND storage_location = ?"
+        params.append(f_location)
+
     if f_cost_min > 0:
         query += " AND cost_price >= ?"
         params.append(f_cost_min)
@@ -399,16 +412,9 @@ elif current_page == 'Stock':
         query += " AND cost_price <= ?"
         params.append(f_cost_max)
 
-    if f_stock_status == "In Stock (>0)":
-        query += " AND current_stock > 0"
-    elif f_stock_status == "Critical (<=Min)":
-        query += " AND current_stock <= min_stock AND min_stock > 0"
-    elif f_stock_status == "Zero Stock (=0)":
-        query += " AND current_stock = 0"
-
     df_items = pd.read_sql_query(query, conn, params=params)
 
-    # TABELUL PRINCIPAL DE DATE (MRPEASY)
+    # TABELUL PRINCIPAL MRPEASY (AFIȘARE EXACTĂ POZA 10)
     st.dataframe(df_items, use_container_width=True, height=520, hide_index=True)
 
 # 7. ALTE MODULE
