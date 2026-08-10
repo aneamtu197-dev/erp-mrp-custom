@@ -46,7 +46,7 @@ def init_and_repair_db():
     );
     """)
 
-    # Unit Conversions
+    # Unit Conversions (Pozele 16 & 17)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS unit_conversions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -103,7 +103,7 @@ current_subtab = query_params.get("subtab", "Items")
 current_setting = query_params.get("setting", "Product_groups")
 edit_uom_id = query_params.get("uom_id", None)
 
-# 4. CSS STILIZARE REPLICATĂ DUPĂ POZA 14
+# 4. CSS STILIZARE REPLICATĂ DUPĂ POZA 16
 st.markdown("""
 <style>
     .stApp { background-color: #f8fafc; }
@@ -224,7 +224,7 @@ st.markdown("""
         font-size: 11px;
         padding: 8px 12px;
         border-radius: 4px;
-        margin-top: 10px;
+        margin-top: 5px;
         margin-bottom: 15px;
     }
 </style>
@@ -592,36 +592,62 @@ elif current_page == 'Stock':
                 </div>
                 """, unsafe_allow_html=True)
 
-                df_convs = pd.read_sql_query("SELECT id, target_uom as 'Target Unit', rate as Rate FROM unit_conversions WHERE uom_id = ?", conn, params=[u_id])
+                # Preluare conversii existente pentru editare directă (Poza 16)
+                df_convs = pd.read_sql_query("SELECT id, target_uom, rate FROM unit_conversions WHERE uom_id = ?", conn, params=[u_id])
                 
-                c_c1, c_c2, c_c3 = st.columns([2, 2, 2])
-                with c_c1:
-                    target_u = st.text_input("Target Unit Name", placeholder="ex: Min sau gr")
-                with c_c2:
-                    rate_val = st.number_input("Rate", value=1.0)
-                with c_c3:
-                    st.write("")
-                    st.write("")
-                    add_conv = st.button("➕ Add Conversion")
+                with st.form("uom_conversions_form"):
+                    st.caption("Modifică sau adaugă conversii (Nume Unit & Rata de conversie):")
+                    
+                    edited_data = []
+                    if not df_convs.empty:
+                        for idx, r in df_convs.iterrows():
+                            c_col1, c_col2, c_col3 = st.columns([3, 3, 1])
+                            with c_col1:
+                                t_uom = st.text_input(f"Target Name #{idx+1}", value=r['target_uom'], key=f"t_uom_{r['id']}")
+                            with c_col2:
+                                t_rate = st.number_input(f"Rate #{idx+1}", value=float(r['rate']), key=f"t_rate_{r['id']}")
+                            with c_col3:
+                                delete_row = st.checkbox("Delete", key=f"del_conv_{r['id']}")
+                            
+                            edited_data.append({'id': r['id'], 'target': t_uom, 'rate': t_rate, 'delete': delete_row})
+                    
+                    st.divider()
+                    st.markdown("**➕ Adaugă o conversie nouă:**")
+                    new_col1, new_col2 = st.columns([3, 3])
+                    with new_col1:
+                        new_target = st.text_input("Nume unitate nouă (ex: Min)", key="new_target_input")
+                    with new_col2:
+                        new_rate = st.number_input("Rată conversie", value=1.0, key="new_rate_input")
 
-                if add_conv and target_u:
-                    conn.cursor().execute("INSERT INTO unit_conversions (uom_id, target_uom, rate) VALUES (?, ?, ?)", (u_id, target_u, rate_val))
+                    submit_conversions = st.form_submit_button("💾 Salvează modificările conversiilor")
+
+                if submit_conversions:
+                    cursor = conn.cursor()
+                    # Salvare editări și ștergeri
+                    for item in edited_data:
+                        if item['delete']:
+                            cursor.execute("DELETE FROM unit_conversions WHERE id = ?", (item['id'],))
+                        else:
+                            cursor.execute("UPDATE unit_conversions SET target_uom = ?, rate = ? WHERE id = ?", (item['target'], item['rate'], item['id']))
+                    
+                    # Salvare conversie nouă
+                    if new_target and new_target.strip():
+                        cursor.execute("INSERT INTO unit_conversions (uom_id, target_uom, rate) VALUES (?, ?, ?)", (u_id, new_target.strip(), new_rate))
+
                     conn.commit()
+                    st.success("Conversiile au fost salvate cu succes!")
                     st.rerun()
-
-                if not df_convs.empty:
-                    st.dataframe(df_convs, use_container_width=True, hide_index=True)
 
                 if save_top:
                     conn.cursor().execute("UPDATE units_of_measurement SET name = ? WHERE id = ?", (new_u_name, u_id))
                     conn.commit()
-                    st.success("Salvat!")
+                    st.success("Numele unității a fost actualizat!")
                     st.rerun()
 
                 if del_top:
                     conn.cursor().execute("DELETE FROM units_of_measurement WHERE id = ?", (u_id,))
                     conn.commit()
-                    st.success("Șters!")
+                    st.success("Unitatea de măsură a fost ștearsă!")
                     st.markdown('<meta http-equiv="refresh" content="0; url=?page=Stock&subtab=Stock_settings&setting=Units_of_measurement">', unsafe_allow_html=True)
 
         # MENIUL STANDARD SETTINGS
@@ -670,7 +696,7 @@ elif current_page == 'Stock':
                     df_g = pd.read_sql_query(q_g, conn, params=p_g)
                     st.dataframe(df_g, use_container_width=True, hide_index=True)
 
-                # 2. UNITS OF MEASUREMENT (RANDARE PERFECTA CU COMPONENTS.HTML)
+                # 2. UNITS OF MEASUREMENT (POZA 14 - TABEL COMPACT)
                 elif current_setting == "Units_of_measurement":
                     c_title, c_btn = st.columns([8, 2])
                     with c_title:
