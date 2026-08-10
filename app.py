@@ -12,7 +12,7 @@ def init_and_repair_db():
     conn = sqlite3.connect('erp_database.db')
     cursor = conn.cursor()
     
-    # Tabela principală Items
+    # Items
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28,7 +28,7 @@ def init_and_repair_db():
     );
     """)
 
-    # Tabela Product Groups
+    # Product Groups
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS product_groups (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -37,7 +37,7 @@ def init_and_repair_db():
     );
     """)
 
-    # Tabela Units of Measurement
+    # Units of Measurement
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS units_of_measurement (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,7 +45,18 @@ def init_and_repair_db():
     );
     """)
 
-    # Tabela Storage Locations / Clienți Extinsă
+    # Unit Conversions (Pozele 16 & 17)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS unit_conversions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        uom_id INTEGER NOT NULL,
+        target_uom VARCHAR(50) NOT NULL,
+        rate REAL NOT NULL,
+        FOREIGN KEY (uom_id) REFERENCES units_of_measurement(id) ON DELETE CASCADE
+    );
+    """)
+
+    # Storage Locations / Clienți
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS storage_locations (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,15 +66,7 @@ def init_and_repair_db():
     );
     """)
 
-    # Verificare și adăugare coloane noi pentru storage_locations
-    cursor.execute("PRAGMA table_info(storage_locations)")
-    cols_loc = [c[1] for c in cursor.fetchall()]
-    if 'site' not in cols_loc:
-        cursor.execute("ALTER TABLE storage_locations ADD COLUMN site VARCHAR(100) DEFAULT 'Main site';")
-    if 'barcode' not in cols_loc:
-        cursor.execute("ALTER TABLE storage_locations ADD COLUMN barcode VARCHAR(100) DEFAULT '-';")
-
-    # Populare implicită dacă tabelele sunt goale
+    # Populare implicită
     cursor.execute("SELECT COUNT(*) FROM units_of_measurement")
     if cursor.fetchone()[0] == 0:
         default_uoms = ['kg', 'l', 'm2', 'Ml', 'Ore', 'pcs', 'SET', 'BUC']
@@ -92,13 +95,14 @@ init_and_repair_db()
 def get_connection():
     return sqlite3.connect('erp_database.db')
 
-# 3. Preluare Pagină, Subtab și Settings-Tab din URL Query Parameters
+# 3. Preluare Query Params
 query_params = st.query_params
 current_page = query_params.get("page", "Home")
 current_subtab = query_params.get("subtab", "Items")
 current_setting = query_params.get("setting", "Product_groups")
+edit_uom_id = query_params.get("uom_id", None)
 
-# 4. CSS STILIZARE REPLICATĂ DUPĂ POZELE 12-15
+# 4. CSS STILIZARE REPLICATĂ DUPĂ POZELE 16 ŞI 17
 st.markdown("""
 <style>
     .stApp { background-color: #f8fafc; }
@@ -212,6 +216,17 @@ st.markdown("""
         margin-bottom: 10px !important;
     }
     .mrp-title { color: #ffffff !important; font-size: 12px !important; font-weight: 700 !important; text-align: center !important; }
+
+    /* Stil Detalii UoM (Pozele 16/17) */
+    .uom-tooltip {
+        background-color: #1e293b;
+        color: #ffffff;
+        font-size: 11px;
+        padding: 8px 12px;
+        border-radius: 4px;
+        margin-top: 10px;
+        margin-bottom: 15px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -326,7 +341,7 @@ def process_mrpeasy_csv(df):
     return imported_count, updated_count
 
 
-# Funcție Import Storage Locations CSV (storage_locations_20260810.csv)
+# Funcție Import Storage Locations CSV
 def process_storage_locations_csv(df):
     cursor = conn.cursor()
     imported_count = 0
@@ -550,113 +565,185 @@ elif current_page == 'Stock':
     # ------------------ SUBTAB: STOCK SETTINGS ------------------
     elif current_subtab == "Stock_settings":
         
-        col_set_nav, col_set_content = st.columns([2, 8])
-
-        with col_set_nav:
-            st.markdown("### Stock settings")
+        # DACA A FOST SELECTAT O UNITATE PENTRU EDITARE DETALII (POZELE 16 ŞI 17)
+        if current_setting == "Units_of_measurement" and edit_uom_id is not None:
             
-            p_class = "settings-item-active" if current_setting == "Product_groups" else "settings-item"
-            u_class = "settings-item-active" if current_setting == "Units_of_measurement" else "settings-item"
-            s_class = "settings-item-active" if current_setting == "Storage_locations" else "settings-item"
-
-            st.markdown(f"""
-            <div class="settings-sidebar">
-                <a href="?page=Stock&subtab=Stock_settings&setting=Product_groups" target="_self" class="{p_class}">Product groups</a>
-                <a href="?page=Stock&subtab=Stock_settings&setting=Units_of_measurement" target="_self" class="{u_class}">Units of measurement</a>
-                <a href="?page=Stock&subtab=Stock_settings&setting=Storage_locations" target="_self" class="{s_class}">Storage locations (Clients)</a>
-            </div>
-            """, unsafe_allow_html=True)
-
-        with col_set_content:
-            
-            # 1. PRODUCT GROUPS
-            if current_setting == "Product_groups":
-                c_title, c_btn = st.columns([8, 2])
-                with c_title:
-                    st.markdown("#### Product groups")
-                with c_btn:
-                    with st.popover("➕ Create", use_container_width=True):
-                        with st.form("add_group_form"):
-                            g_num = st.text_input("Number")
-                            g_name = st.text_input("Name")
-                            if st.form_submit_button("Save"):
-                                conn.cursor().execute("INSERT INTO product_groups (number, name) VALUES (?, ?)", (g_num, g_name))
-                                conn.commit()
-                                st.rerun()
-
-                g_search = st.text_input("Search Number / Name", "", placeholder="Search...")
-                q_g = "SELECT number as Number, name as Name FROM product_groups WHERE 1=1"
-                p_g = []
-                if g_search:
-                    q_g += " AND (number LIKE ? OR name LIKE ?)"
-                    p_g.extend([f"%{g_search}%", f"%{g_search}%"])
+            uom_row = conn.cursor().execute("SELECT id, name FROM units_of_measurement WHERE id = ?", (edit_uom_id,)).fetchone()
+            if uom_row:
+                u_id, u_name = uom_row
                 
-                df_g = pd.read_sql_query(q_g, conn, params=p_g)
-                st.dataframe(df_g, use_container_width=True, hide_index=True)
-
-            # 2. UNITS OF MEASUREMENT
-            elif current_setting == "Units_of_measurement":
-                c_title, c_btn = st.columns([8, 2])
-                with c_title:
-                    st.markdown("#### Units of measurement")
-                with c_btn:
-                    with st.popover("➕ Create", use_container_width=True):
-                        with st.form("add_uom_form"):
-                            u_name = st.text_input("Unit of measurement")
-                            if st.form_submit_button("Save"):
-                                conn.cursor().execute("INSERT OR IGNORE INTO units_of_measurement (name) VALUES (?)", (u_name,))
-                                conn.commit()
-                                st.rerun()
-
-                df_u = pd.read_sql_query("SELECT name as 'Unit of measurement' FROM units_of_measurement ORDER BY name", conn)
-                st.dataframe(df_u, use_container_width=True, hide_index=True)
-
-            # 3. STORAGE LOCATIONS / CLIENȚI (POZA 15 + IMPORT CSV)
-            elif current_setting == "Storage_locations":
-                c_title, c_btn1, c_btn2, c_btn3 = st.columns([5, 2, 1.5, 2])
-                with c_title:
-                    st.markdown("#### Storage locations (Virtual Depozite Clienți)")
+                st.markdown(f"### Unit of measurement {u_name} details")
                 
-                with c_btn1:
-                    with st.popover("➕ Create Client/Location", use_container_width=True):
-                        with st.form("add_loc_form"):
-                            l_name = st.text_input("Storage location")
-                            l_site = st.text_input("Site", "Main site")
-                            l_code = st.text_input("Barcode")
-                            if st.form_submit_button("Save"):
-                                conn.cursor().execute("INSERT OR IGNORE INTO storage_locations (name, site, barcode) VALUES (?, ?, ?)", (l_name, l_site, l_code))
-                                conn.commit()
-                                st.rerun()
+                # BARA BUTOANE SUS (Back, Save, Delete)
+                b1, b2, b3, _ = st.columns([1, 1, 1, 7])
+                with b1:
+                    st.markdown(f'<a href="?page=Stock&subtab=Stock_settings&setting=Units_of_measurement" target="_self"><button style="height:36px; background-color:#e2e8f0; color:#1e293b; border:none; border-radius:4px; padding:0 20px; font-weight:bold; cursor:pointer;">Back</button></a>', unsafe_allow_html=True)
+                with b2:
+                    save_top = st.button("Save", type="primary", key="save_uom_top")
+                with b3:
+                    del_top = st.button("Delete", key="del_uom_top")
 
-                with c_btn2:
-                    df_loc_exp = pd.read_sql_query("SELECT name as 'Storage location', site as Site, barcode as Barcode FROM storage_locations ORDER BY name", conn)
-                    st.download_button("↓ CSV", data=df_loc_exp.to_csv(index=False), file_name="storage_locations.csv", mime="text/csv", use_container_width=True)
+                st.write("")
+                new_u_name = st.text_input("Name *", value=u_name)
+                
+                st.write("#### Unit conversions")
+                st.markdown("""
+                <div class="uom-tooltip">
+                    Other units, which this unit can be converted to, for convenience. Can be used in bills of materials. E.g. if the unit is "kg", a conversion could be 1 gr = 0.001 kg.
+                </div>
+                """, unsafe_allow_html=True)
 
-                with c_btn3:
-                    with st.popover("↑ Import from CSV", use_container_width=True):
-                        st.subheader("Import Storage Locations")
-                        loc_csv = st.file_uploader("Încarcă storage_locations.csv", type=['csv'], key="loc_csv_up")
-                        if loc_csv is not None:
-                            try:
-                                df_loc_up = pd.read_csv(loc_csv)
-                                st.write("Aperçu:")
-                                st.dataframe(df_loc_up.head(3))
-                                if st.button("🚀 Execută Importul Locații"):
-                                    a, u = process_storage_locations_csv(df_loc_up)
-                                    st.success(f"Import finalizat! Adăugate: {a}, Actualizate: {u}.")
+                # Conversii existente
+                df_convs = pd.read_sql_query("SELECT id, target_uom, rate FROM unit_conversions WHERE uom_id = ?", conn, params=[u_id])
+                
+                # Formular adăugare conversie
+                c_c1, c_c2, c_c3 = st.columns([2, 2, 2])
+                with c_c1:
+                    target_u = st.text_input("Target Unit Name", placeholder="ex: Min sau gr")
+                with c_c2:
+                    rate_val = st.number_input("Rate (ex: 1)", value=1.0)
+                with c_c3:
+                    st.write("")
+                    st.write("")
+                    add_conv = st.button("➕ Add Conversion")
+
+                if add_conv and target_u:
+                    conn.cursor().execute("INSERT INTO unit_conversions (uom_id, target_uom, rate) VALUES (?, ?, ?)", (u_id, target_u, rate_val))
+                    conn.commit()
+                    st.rerun()
+
+                if not df_convs.empty:
+                    st.dataframe(df_convs, use_container_width=True, hide_index=True)
+
+                if save_top:
+                    conn.cursor().execute("UPDATE units_of_measurement SET name = ? WHERE id = ?", (new_u_name, u_id))
+                    conn.commit()
+                    st.success("Salvat!")
+                    st.rerun()
+
+                if del_top:
+                    conn.cursor().execute("DELETE FROM units_of_measurement WHERE id = ?", (u_id,))
+                    conn.commit()
+                    st.success("Șters!")
+                    st.markdown('<meta http-equiv="refresh" content="0; url=?page=Stock&subtab=Stock_settings&setting=Units_of_measurement">', unsafe_allow_html=True)
+
+        # MENIUL STANDARD SETTINGS
+        else:
+            col_set_nav, col_set_content = st.columns([2, 8])
+
+            with col_set_nav:
+                st.markdown("### Stock settings")
+                
+                p_class = "settings-item-active" if current_setting == "Product_groups" else "settings-item"
+                u_class = "settings-item-active" if current_setting == "Units_of_measurement" else "settings-item"
+                s_class = "settings-item-active" if current_setting == "Storage_locations" else "settings-item"
+
+                st.markdown(f"""
+                <div class="settings-sidebar">
+                    <a href="?page=Stock&subtab=Stock_settings&setting=Product_groups" target="_self" class="{p_class}">Product groups</a>
+                    <a href="?page=Stock&subtab=Stock_settings&setting=Units_of_measurement" target="_self" class="{u_class}">Units of measurement</a>
+                    <a href="?page=Stock&subtab=Stock_settings&setting=Storage_locations" target="_self" class="{s_class}">Storage locations (Clients)</a>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with col_set_content:
+                
+                # 1. PRODUCT GROUPS
+                if current_setting == "Product_groups":
+                    c_title, c_btn = st.columns([8, 2])
+                    with c_title:
+                        st.markdown("#### Product groups")
+                    with c_btn:
+                        with st.popover("➕ Create", use_container_width=True):
+                            with st.form("add_group_form"):
+                                g_num = st.text_input("Number")
+                                g_name = st.text_input("Name")
+                                if st.form_submit_button("Save"):
+                                    conn.cursor().execute("INSERT INTO product_groups (number, name) VALUES (?, ?)", (g_num, g_name))
+                                    conn.commit()
                                     st.rerun()
-                            except Exception as e:
-                                st.error(f"Eroare: {e}")
 
-                l_search = st.text_input("Search Storage location", "", placeholder="Search...")
-                q_l = "SELECT id as ID, name as 'Storage location', site as Site, barcode as Barcode FROM storage_locations WHERE 1=1"
-                p_l = []
-                if l_search:
-                    q_l += " AND name LIKE ?"
-                    p_l.append(f"%{l_search}%")
+                    g_search = st.text_input("Search Number / Name", "", placeholder="Search...")
+                    q_g = "SELECT number as Number, name as Name FROM product_groups WHERE 1=1"
+                    p_g = []
+                    if g_search:
+                        q_g += " AND (number LIKE ? OR name LIKE ?)"
+                        p_g.extend([f"%{g_search}%", f"%{g_search}%"])
+                    
+                    df_g = pd.read_sql_query(q_g, conn, params=p_g)
+                    st.dataframe(df_g, use_container_width=True, hide_index=True)
 
-                df_l = pd.read_sql_query(q_l, conn, params=p_l)
-                st.dataframe(df_l, use_container_width=True, hide_index=True)
+                # 2. UNITS OF MEASUREMENT (POZELE 14, 16, 17)
+                elif current_setting == "Units_of_measurement":
+                    c_title, c_btn = st.columns([8, 2])
+                    with c_title:
+                        st.markdown("#### Units of measurement")
+                    with c_btn:
+                        with st.popover("➕ Create", use_container_width=True):
+                            with st.form("add_uom_form"):
+                                u_name = st.text_input("Unit of measurement")
+                                if st.form_submit_button("Save"):
+                                    conn.cursor().execute("INSERT OR IGNORE INTO units_of_measurement (name) VALUES (?)", (u_name,))
+                                    conn.commit()
+                                    st.rerun()
+
+                    df_u = pd.read_sql_query("SELECT id, name as 'Unit of measurement' FROM units_of_measurement ORDER BY name", conn)
+                    
+                    # Afișare interactivă cu link pentru editare detalii (Poza 16)
+                    for _, r in df_u.iterrows():
+                        c_name, c_act = st.columns([8, 2])
+                        with c_name:
+                            st.write(f"**{r['Unit of measurement']}**")
+                        with c_act:
+                            st.markdown(f'<a href="?page=Stock&subtab=Stock_settings&setting=Units_of_measurement&uom_id={r["id"]}" target="_self" style="text-decoration:none;">✏️ Edit Details</a>', unsafe_allow_html=True)
+                        st.divider()
+
+                # 3. STORAGE LOCATIONS / CLIENȚI
+                elif current_setting == "Storage_locations":
+                    c_title, c_btn1, c_btn2, c_btn3 = st.columns([5, 2, 1.5, 2])
+                    with c_title:
+                        st.markdown("#### Storage locations (Virtual Depozite Clienți)")
+                    
+                    with c_btn1:
+                        with st.popover("➕ Create Client/Location", use_container_width=True):
+                            with st.form("add_loc_form"):
+                                l_name = st.text_input("Storage location")
+                                l_site = st.text_input("Site", "Main site")
+                                l_code = st.text_input("Barcode")
+                                if st.form_submit_button("Save"):
+                                    conn.cursor().execute("INSERT OR IGNORE INTO storage_locations (name, site, barcode) VALUES (?, ?, ?)", (l_name, l_site, l_code))
+                                    conn.commit()
+                                    st.rerun()
+
+                    with c_btn2:
+                        df_loc_exp = pd.read_sql_query("SELECT name as 'Storage location', site as Site, barcode as Barcode FROM storage_locations ORDER BY name", conn)
+                        st.download_button("↓ CSV", data=df_loc_exp.to_csv(index=False), file_name="storage_locations.csv", mime="text/csv", use_container_width=True)
+
+                    with c_btn3:
+                        with st.popover("↑ Import from CSV", use_container_width=True):
+                            st.subheader("Import Storage Locations")
+                            loc_csv = st.file_uploader("Încarcă storage_locations.csv", type=['csv'], key="loc_csv_up")
+                            if loc_csv is not None:
+                                try:
+                                    df_loc_up = pd.read_csv(loc_csv)
+                                    st.write("Aperçu:")
+                                    st.dataframe(df_loc_up.head(3))
+                                    if st.button("🚀 Execută Importul Locații"):
+                                        a, u = process_storage_locations_csv(df_loc_up)
+                                        st.success(f"Import finalizat! Adăugate: {a}, Actualizate: {u}.")
+                                        st.rerun()
+                                except Exception as e:
+                                    st.error(f"Eroare: {e}")
+
+                    l_search = st.text_input("Search Storage location", "", placeholder="Search...")
+                    q_l = "SELECT id as ID, name as 'Storage location', site as Site, barcode as Barcode FROM storage_locations WHERE 1=1"
+                    p_l = []
+                    if l_search:
+                        q_l += " AND name LIKE ?"
+                        p_l.append(f"%{l_search}%")
+
+                    df_l = pd.read_sql_query(q_l, conn, params=p_l)
+                    st.dataframe(df_l, use_container_width=True, hide_index=True)
 
     # ------------------ SUBTAB: CRITICAL ON-HAND ------------------
     elif current_subtab == "Critical_on_hand":
