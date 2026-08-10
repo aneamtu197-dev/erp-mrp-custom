@@ -45,7 +45,7 @@ def init_and_repair_db():
     );
     """)
 
-    # Unit Conversions (Pozele 16 & 17)
+    # Unit Conversions
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS unit_conversions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -102,7 +102,7 @@ current_subtab = query_params.get("subtab", "Items")
 current_setting = query_params.get("setting", "Product_groups")
 edit_uom_id = query_params.get("uom_id", None)
 
-# 4. CSS STILIZARE REPLICATĂ DUPĂ POZELE 16 ŞI 17
+# 4. CSS STILIZARE REPLICATĂ DUPĂ POZA 14
 st.markdown("""
 <style>
     .stApp { background-color: #f8fafc; }
@@ -181,6 +181,39 @@ st.markdown("""
         border-radius: 4px;
     }
 
+    /* Tabela Compacta MRPeasy (Poza 14) */
+    .mrp-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 13px;
+        background-color: #ffffff;
+    }
+    .mrp-table th {
+        background-color: #e2e8f0;
+        color: #475569;
+        font-weight: 600;
+        padding: 8px 12px;
+        text-align: left;
+        border-bottom: 1px solid #cbd5e1;
+    }
+    .mrp-table td {
+        padding: 8px 12px;
+        border-bottom: 1px solid #f1f5f9;
+        color: #1e293b;
+    }
+    .mrp-table tr:hover {
+        background-color: #f8fafc;
+    }
+    .mrp-edit-link {
+        color: #64748b;
+        text-decoration: none;
+        font-size: 14px;
+    }
+    .mrp-edit-link:hover {
+        color: #2563eb;
+    }
+
     .mrp-launchpad {
         display: grid;
         grid-template-columns: repeat(8, 1fr);
@@ -217,7 +250,6 @@ st.markdown("""
     }
     .mrp-title { color: #ffffff !important; font-size: 12px !important; font-weight: 700 !important; text-align: center !important; }
 
-    /* Stil Detalii UoM (Pozele 16/17) */
     .uom-tooltip {
         background-color: #1e293b;
         color: #ffffff;
@@ -565,7 +597,7 @@ elif current_page == 'Stock':
     # ------------------ SUBTAB: STOCK SETTINGS ------------------
     elif current_subtab == "Stock_settings":
         
-        # DACA A FOST SELECTAT O UNITATE PENTRU EDITARE DETALII (POZELE 16 ŞI 17)
+        # EDITARE DETALII UOM (POZELE 16 & 17)
         if current_setting == "Units_of_measurement" and edit_uom_id is not None:
             
             uom_row = conn.cursor().execute("SELECT id, name FROM units_of_measurement WHERE id = ?", (edit_uom_id,)).fetchone()
@@ -574,7 +606,6 @@ elif current_page == 'Stock':
                 
                 st.markdown(f"### Unit of measurement {u_name} details")
                 
-                # BARA BUTOANE SUS (Back, Save, Delete)
                 b1, b2, b3, _ = st.columns([1, 1, 1, 7])
                 with b1:
                     st.markdown(f'<a href="?page=Stock&subtab=Stock_settings&setting=Units_of_measurement" target="_self"><button style="height:36px; background-color:#e2e8f0; color:#1e293b; border:none; border-radius:4px; padding:0 20px; font-weight:bold; cursor:pointer;">Back</button></a>', unsafe_allow_html=True)
@@ -593,15 +624,13 @@ elif current_page == 'Stock':
                 </div>
                 """, unsafe_allow_html=True)
 
-                # Conversii existente
-                df_convs = pd.read_sql_query("SELECT id, target_uom, rate FROM unit_conversions WHERE uom_id = ?", conn, params=[u_id])
+                df_convs = pd.read_sql_query("SELECT id, target_uom as 'Target Unit', rate as Rate FROM unit_conversions WHERE uom_id = ?", conn, params=[u_id])
                 
-                # Formular adăugare conversie
                 c_c1, c_c2, c_c3 = st.columns([2, 2, 2])
                 with c_c1:
                     target_u = st.text_input("Target Unit Name", placeholder="ex: Min sau gr")
                 with c_c2:
-                    rate_val = st.number_input("Rate (ex: 1)", value=1.0)
+                    rate_val = st.number_input("Rate", value=1.0)
                 with c_c3:
                     st.write("")
                     st.write("")
@@ -632,7 +661,9 @@ elif current_page == 'Stock':
             col_set_nav, col_set_content = st.columns([2, 8])
 
             with col_set_nav:
-                st.markdown("### Stock settings")
+                title_col, create_col = st.columns([1, 1])
+                with title_col:
+                    st.markdown("### Stock settings")
                 
                 p_class = "settings-item-active" if current_setting == "Product_groups" else "settings-item"
                 u_class = "settings-item-active" if current_setting == "Units_of_measurement" else "settings-item"
@@ -642,13 +673,13 @@ elif current_page == 'Stock':
                 <div class="settings-sidebar">
                     <a href="?page=Stock&subtab=Stock_settings&setting=Product_groups" target="_self" class="{p_class}">Product groups</a>
                     <a href="?page=Stock&subtab=Stock_settings&setting=Units_of_measurement" target="_self" class="{u_class}">Units of measurement</a>
-                    <a href="?page=Stock&subtab=Stock_settings&setting=Storage_locations" target="_self" class="{s_class}">Storage locations (Clients)</a>
+                    <a href="?page=Stock&subtab=Stock_settings&setting=Storage_locations" target="_self" class="{s_class}">Storage locations</a>
                 </div>
                 """, unsafe_allow_html=True)
 
             with col_set_content:
                 
-                # 1. PRODUCT GROUPS
+                # 1. PRODUCT GROUPS (POZA 13)
                 if current_setting == "Product_groups":
                     c_title, c_btn = st.columns([8, 2])
                     with c_title:
@@ -673,7 +704,7 @@ elif current_page == 'Stock':
                     df_g = pd.read_sql_query(q_g, conn, params=p_g)
                     st.dataframe(df_g, use_container_width=True, hide_index=True)
 
-                # 2. UNITS OF MEASUREMENT (POZELE 14, 16, 17)
+                # 2. UNITS OF MEASUREMENT (REPLICAT EXACT POZA 14)
                 elif current_setting == "Units_of_measurement":
                     c_title, c_btn = st.columns([8, 2])
                     with c_title:
@@ -687,22 +718,38 @@ elif current_page == 'Stock':
                                     conn.commit()
                                     st.rerun()
 
-                    df_u = pd.read_sql_query("SELECT id, name as 'Unit of measurement' FROM units_of_measurement ORDER BY name", conn)
-                    
-                    # Afișare interactivă cu link pentru editare detalii (Poza 16)
-                    for _, r in df_u.iterrows():
-                        c_name, c_act = st.columns([8, 2])
-                        with c_name:
-                            st.write(f"**{r['Unit of measurement']}**")
-                        with c_act:
-                            st.markdown(f'<a href="?page=Stock&subtab=Stock_settings&setting=Units_of_measurement&uom_id={r["id"]}" target="_self" style="text-decoration:none;">✏️ Edit Details</a>', unsafe_allow_html=True)
-                        st.divider()
+                    df_u = pd.read_sql_query("SELECT id, name FROM units_of_measurement ORDER BY name", conn)
 
-                # 3. STORAGE LOCATIONS / CLIENȚI
+                    # Tabel HTML pur compact (100% identic Poza 14)
+                    table_html = """
+                    <table class="mrp-table">
+                        <thead>
+                            <tr>
+                                <th>Unit of measurement ↑</th>
+                                <th style="text-align: right; width: 60px;">+</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                    """
+                    for _, r in df_u.iterrows():
+                        u_id_val = r['id']
+                        u_name_val = r['name']
+                        table_html += f"""
+                            <tr>
+                                <td>{u_name_val}</td>
+                                <td style="text-align: right;">
+                                    <a href="?page=Stock&subtab=Stock_settings&setting=Units_of_measurement&uom_id={u_id_val}" target="_self" class="mrp-edit-link" title="Edit">✏️</a>
+                                </td>
+                            </tr>
+                        """
+                    table_html += "</tbody></table>"
+                    st.markdown(table_html, unsafe_allow_html=True)
+
+                # 3. STORAGE LOCATIONS
                 elif current_setting == "Storage_locations":
                     c_title, c_btn1, c_btn2, c_btn3 = st.columns([5, 2, 1.5, 2])
                     with c_title:
-                        st.markdown("#### Storage locations (Virtual Depozite Clienți)")
+                        st.markdown("#### Storage locations")
                     
                     with c_btn1:
                         with st.popover("➕ Create Client/Location", use_container_width=True):
@@ -756,7 +803,7 @@ elif current_page == 'Stock':
                 min_stock as 'Reorder point', 
                 (min_stock - current_stock) as 'Shortage Quantity',
                 unit_of_measure as 'UoM', 
-                storage_location as 'Default storage location (Client)'
+                storage_location as 'Default storage location'
             FROM items 
             WHERE current_stock <= min_stock AND min_stock > 0
             ORDER BY (min_stock - current_stock) DESC
