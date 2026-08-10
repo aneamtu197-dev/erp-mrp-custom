@@ -7,7 +7,7 @@ from datetime import datetime
 # 1. Configurare Pagină
 st.set_page_config(page_title="CAN Prod System", layout="wide", initial_sidebar_state="collapsed")
 
-# 2. Reparare și Inițializare Bază de Date (cu adăugare storage_location)
+# 2. Reparare și Inițializare Bază de Date
 def init_and_repair_db():
     conn = sqlite3.connect('erp_database.db')
     cursor = conn.cursor()
@@ -18,18 +18,17 @@ def init_and_repair_db():
         name VARCHAR(255) NOT NULL,
         type VARCHAR(50) DEFAULT 'RAW_MATERIAL',
         unit_of_measure VARCHAR(20) DEFAULT 'pcs',
-        storage_location VARCHAR(100) DEFAULT 'General',
+        storage_location VARCHAR(100) DEFAULT '-',
         current_stock REAL DEFAULT 0.0,
         min_stock REAL DEFAULT 0.0,
         cost_price REAL DEFAULT 0.0
     );
     """)
     
-    # Verificare și adăugare coloană dacă baza de date există deja
     cursor.execute("PRAGMA table_info(items)")
     columns = [column[1] for column in cursor.fetchall()]
     if 'storage_location' not in columns:
-        cursor.execute("ALTER TABLE items ADD COLUMN storage_location VARCHAR(100) DEFAULT 'General';")
+        cursor.execute("ALTER TABLE items ADD COLUMN storage_location VARCHAR(100) DEFAULT '-';")
         
     conn.commit()
     conn.close()
@@ -49,7 +48,6 @@ st.markdown("""
     .stApp { background-color: #f8fafc; }
     [data-testid="stSidebar"] { display: none; }
 
-    /* Top Bar */
     .top-bar {
         display: flex;
         justify-content: space-between;
@@ -65,7 +63,6 @@ st.markdown("""
     .top-info { font-size: 11px; color: #94a3b8; }
     .top-bar-right { display: flex; align-items: center; gap: 15px; font-size: 12px; color: #475569; font-weight: 600; }
 
-    /* Meniu Rapid cu Iconițe (MRPeasy Top Bar) */
     .mrp-icon-bar {
         display: flex;
         background-color: #1e62d0;
@@ -87,7 +84,6 @@ st.markdown("""
         background-color: #1d4ed8;
     }
 
-    /* Sub-meniu MRPeasy Sub-tabs */
     .mrp-subtabs {
         display: flex;
         gap: 20px;
@@ -111,7 +107,6 @@ st.markdown("""
         color: #1e293b;
     }
 
-    /* Grid Launchpad pentru Home (Poza 1) */
     .mrp-launchpad {
         display: grid;
         grid-template-columns: repeat(8, 1fr);
@@ -158,7 +153,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Top Bar
 now_str = datetime.now().strftime("%d/%m/%Y %H:%M")
 st.markdown(f"""
 <div class="top-bar">
@@ -176,7 +170,6 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# Bara de Iconițe MRPeasy
 st.markdown("""
 <div class="mrp-icon-bar">
     <a href="?page=Home" target="_self" class="mrp-icon-item" title="Main Menu">🏠</a>
@@ -193,7 +186,7 @@ st.markdown("""
 
 conn = get_connection()
 
-# Funcție Import MRPeasy CSV
+# Funcție Import Corectat 100% din MRPeasy CSV
 def process_mrpeasy_csv(df):
     cursor = conn.cursor()
     imported_count = 0
@@ -219,8 +212,12 @@ def process_mrpeasy_csv(df):
             
         um = str(row.get('uom', row.get('unit of measure', row.get('unit', row.get('um', 'pcs'))))).strip()
         
-        loc_val = str(row.get('default storage location', row.get('storage location', row.get('location', 'General')))).strip()
-        storage_loc = loc_val if loc_val and loc_val != 'nan' else 'General'
+        # Extragere precisă a locației din coloana "Default storage location"
+        loc_raw = row.get('default storage location', row.get('storage location', row.get('location', '-')))
+        if pd.notnull(loc_raw) and str(loc_raw).strip() != '' and str(loc_raw).strip().lower() != 'nan':
+            storage_loc = str(loc_raw).strip()
+        else:
+            storage_loc = '-'
         
         try:
             val = row.get('in stock', row.get('available', row.get('stoc', 0)))
@@ -281,7 +278,7 @@ if current_page == 'Home':
     </div>
     """, unsafe_allow_html=True)
 
-# 6. ECRAN MODUL STOCK (REPLICAT EXACT POZA 10 CU STORAGE LOCATION)
+# 6. ECRAN MODUL STOCK
 elif current_page == 'Stock':
     
     total_db_items = conn.cursor().execute("SELECT COUNT(*) FROM items").fetchone()[0]
@@ -357,9 +354,9 @@ elif current_page == 'Stock':
 
     st.write("")
 
-    # FILTRELE DIN ANTET (MAPPING IDENTIC POZA 10)
-    um_options = ["All"] + [r[0] for r in conn.cursor().execute("SELECT DISTINCT unit_of_measure FROM items WHERE unit_of_measure IS NOT NULL AND unit_of_measure != ''").fetchall()]
-    loc_options = ["All"] + [r[0] for r in conn.cursor().execute("SELECT DISTINCT storage_location FROM items WHERE storage_location IS NOT NULL AND storage_location != ''").fetchall()]
+    # FILTRELE DIN ANTET DUPĂ LOCAȚIILE REALE
+    um_options = ["All"] + [r[0] for r in conn.cursor().execute("SELECT DISTINCT unit_of_measure FROM items WHERE unit_of_measure IS NOT NULL AND unit_of_measure != '' ORDER BY unit_of_measure").fetchall()]
+    loc_options = ["All"] + [r[0] for r in conn.cursor().execute("SELECT DISTINCT storage_location FROM items WHERE storage_location IS NOT NULL AND storage_location != '' ORDER BY storage_location").fetchall()]
 
     f1, f2, f3, f4, f5, f6 = st.columns([2, 3, 2, 1.5, 2, 1.5])
     
@@ -384,7 +381,6 @@ elif current_page == 'Stock':
         st.write("")
         btn_search = st.button("Search", type="primary", use_container_width=True)
 
-    # CONSTRUIRE INTEROGARE SQL FILTRATĂ
     query = "SELECT id as ID, code as 'Part No.', name as 'Part description', unit_of_measure as UoM, storage_location as 'Default storage location', cost_price as 'Cost (€)', current_stock as 'In stock', min_stock as 'Reorder point' FROM items WHERE 1=1"
     params = []
 
@@ -414,7 +410,6 @@ elif current_page == 'Stock':
 
     df_items = pd.read_sql_query(query, conn, params=params)
 
-    # TABELUL PRINCIPAL MRPEASY (AFIȘARE EXACTĂ POZA 10)
     st.dataframe(df_items, use_container_width=True, height=520, hide_index=True)
 
 # 7. ALTE MODULE
