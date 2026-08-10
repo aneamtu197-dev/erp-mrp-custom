@@ -301,7 +301,6 @@ def process_mrpeasy_csv(df):
         loc_raw = row.get('default storage location', row.get('storage location', row.get('location', '-')))
         if pd.notnull(loc_raw) and str(loc_raw).strip() != '' and str(loc_raw).strip().lower() != 'nan':
             storage_loc = str(loc_raw).strip()
-            # Inserare cu generare de Barcode automat dacă nu există
             cursor.execute("SELECT id FROM storage_locations WHERE name = ?", (storage_loc,))
             if not cursor.fetchone():
                 auto_bc = generate_storage_barcode(conn, storage_loc)
@@ -465,7 +464,6 @@ elif current_page == 'Stock':
                                 "INSERT INTO items (code, name, type, unit_of_measure, storage_location, current_stock, min_stock, cost_price, selling_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                                 (code, name, item_type, um, storage_loc, current_stock, min_stock, cost, selling_price)
                             )
-                            # Generare Barcode pentru noua locație
                             cursor.execute("SELECT id FROM storage_locations WHERE name = ?", (storage_loc,))
                             if not cursor.fetchone():
                                 auto_bc = generate_storage_barcode(conn, storage_loc)
@@ -584,7 +582,7 @@ elif current_page == 'Stock':
     # ------------------ SUBTAB: STOCK SETTINGS ------------------
     elif current_subtab == "Stock_settings":
         
-        # EDITARE DETALII UOM (POZELE 16 & 17)
+        # EDITARE DETALII UOM
         if current_setting == "Units_of_measurement" and edit_uom_id is not None:
             
             uom_row = conn.cursor().execute("SELECT id, name FROM units_of_measurement WHERE id = ?", (edit_uom_id,)).fetchone()
@@ -771,7 +769,7 @@ elif current_page == 'Stock':
                     calc_height = max(180, len(df_u) * 35 + 40)
                     components.html(iframe_uom_html, height=calc_height, scrolling=True)
 
-                # 3. STORAGE LOCATIONS (GENERARE AUTOMATĂ DE BARCODE)
+                # 3. STORAGE LOCATIONS
                 elif current_setting == "Storage_locations":
                     c_title, c_btn1, c_btn2, c_btn3 = st.columns([5, 2, 1.5, 2])
                     with c_title:
@@ -808,7 +806,7 @@ elif current_page == 'Stock':
                                         a, u = process_storage_locations_csv(df_loc_up)
                                         st.success(f"Import finalizat! Adăugate: {a}, Actualizate: {u}.")
                                         st.rerun()
-                                meț Except Exception as e:
+                                except Exception as e:
                                     st.error(f"Eroare: {e}")
 
                     l_search = st.text_input("Search Storage location", "", placeholder="Search...")
