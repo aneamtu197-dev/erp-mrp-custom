@@ -28,7 +28,7 @@ def init_and_repair_db():
     );
     """)
 
-    # Tabela Product Groups (Poza 13)
+    # Tabela Product Groups
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS product_groups (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -37,7 +37,7 @@ def init_and_repair_db():
     );
     """)
 
-    # Tabela Units of Measurement (Poza 14)
+    # Tabela Units of Measurement
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS units_of_measurement (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,13 +45,23 @@ def init_and_repair_db():
     );
     """)
 
-    # Tabela Storage Locations / Clienți (Poza 15)
+    # Tabela Storage Locations / Clienți Extinsă
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS storage_locations (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name VARCHAR(100) UNIQUE NOT NULL
+        name VARCHAR(100) UNIQUE NOT NULL,
+        site VARCHAR(100) DEFAULT 'Main site',
+        barcode VARCHAR(100) DEFAULT '-'
     );
     """)
+
+    # Verificare și adăugare coloane noi pentru storage_locations
+    cursor.execute("PRAGMA table_info(storage_locations)")
+    cols_loc = [c[1] for c in cursor.fetchall()]
+    if 'site' not in cols_loc:
+        cursor.execute("ALTER TABLE storage_locations ADD COLUMN site VARCHAR(100) DEFAULT 'Main site';")
+    if 'barcode' not in cols_loc:
+        cursor.execute("ALTER TABLE storage_locations ADD COLUMN barcode VARCHAR(100) DEFAULT '-';")
 
     # Populare implicită dacă tabelele sunt goale
     cursor.execute("SELECT COUNT(*) FROM units_of_measurement")
@@ -141,7 +151,6 @@ st.markdown("""
     .mrp-subtab { color: #64748b; text-decoration: none; }
     .mrp-subtab:hover { color: #1e293b; }
 
-    /* Meniu Lateral Stânga pentru Stock Settings (Poza 12) */
     .settings-sidebar {
         background-color: #f1f5f9;
         border-radius: 4px;
@@ -239,7 +248,7 @@ st.markdown("""
 
 conn = get_connection()
 
-# Funcție Import Corectat din MRPeasy CSV
+# Funcție Import Items CSV
 def process_mrpeasy_csv(df):
     cursor = conn.cursor()
     imported_count = 0
@@ -268,7 +277,6 @@ def process_mrpeasy_csv(df):
         loc_raw = row.get('default storage location', row.get('storage location', row.get('location', '-')))
         if pd.notnull(loc_raw) and str(loc_raw).strip() != '' and str(loc_raw).strip().lower() != 'nan':
             storage_loc = str(loc_raw).strip()
-            # Inserare automată a locației/clientului în tabela storage_locations dacă nu există
             cursor.execute("INSERT OR IGNORE INTO storage_locations (name) VALUES (?)", (storage_loc,))
         else:
             storage_loc = '-'
@@ -312,6 +320,42 @@ def process_mrpeasy_csv(df):
                 INSERT INTO items (code, name, type, unit_of_measure, storage_location, current_stock, min_stock, cost_price, selling_price)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (code, name, item_type, um, storage_loc, current_stock, min_stock, cost_price, selling_price))
+            imported_count += 1
+
+    conn.commit()
+    return imported_count, updated_count
+
+
+# Funcție Import Storage Locations CSV (storage_locations_20260810.csv)
+def process_storage_locations_csv(df):
+    cursor = conn.cursor()
+    imported_count = 0
+    updated_count = 0
+    df.columns = [str(col).strip().lower() for col in df.columns]
+    
+    for _, row in df.iterrows():
+        loc_name = str(row.get('storage location', row.get('location', row.get('name', '')))).strip()
+        if not loc_name or loc_name == 'nan':
+            continue
+            
+        site = str(row.get('site', 'Main site')).strip()
+        barcode = str(row.get('barcode', '-')).strip()
+
+        cursor.execute("SELECT id FROM storage_locations WHERE name = ?", (loc_name,))
+        existing = cursor.fetchone()
+        
+        if existing:
+            cursor.execute("""
+                UPDATE storage_locations 
+                SET site=?, barcode=?
+                WHERE name=?
+            """, (site, barcode, loc_name))
+            updated_count += 1
+        else:
+            cursor.execute("""
+                INSERT INTO storage_locations (name, site, barcode)
+                VALUES (?, ?, ?)
+            """, (loc_name, site, barcode))
             imported_count += 1
 
     conn.commit()
@@ -391,7 +435,6 @@ elif current_page == 'Stock':
                                 "INSERT INTO items (code, name, type, unit_of_measure, storage_location, current_stock, min_stock, cost_price, selling_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                                 (code, name, item_type, um, storage_loc, current_stock, min_stock, cost, selling_price)
                             )
-                            # Salvare și în lista de locații/clienți
                             cursor.execute("INSERT OR IGNORE INTO storage_locations (name) VALUES (?)", (storage_loc,))
                             conn.commit()
                             st.success(f"Articolul {code} salvat!")
@@ -504,12 +547,11 @@ elif current_page == 'Stock':
         df_items = pd.read_sql_query(query, conn, params=params)
         st.dataframe(df_items, use_container_width=True, height=520, hide_index=True)
 
-    # ------------------ SUBTAB: STOCK SETTINGS (POZELE 12-15) ------------------
+    # ------------------ SUBTAB: STOCK SETTINGS ------------------
     elif current_subtab == "Stock_settings":
         
         col_set_nav, col_set_content = st.columns([2, 8])
 
-        # Meniu stânga (Poza 12)
         with col_set_nav:
             st.markdown("### Stock settings")
             
@@ -525,10 +567,9 @@ elif current_page == 'Stock':
             </div>
             """, unsafe_allow_html=True)
 
-        # Conținut dreapta (Pozele 13, 14, 15)
         with col_set_content:
             
-            # --- 1. PRODUCT GROUPS (Poza 13) ---
+            # 1. PRODUCT GROUPS
             if current_setting == "Product_groups":
                 c_title, c_btn = st.columns([8, 2])
                 with c_title:
@@ -543,7 +584,6 @@ elif current_page == 'Stock':
                                 conn.commit()
                                 st.rerun()
 
-                # Căutare
                 g_search = st.text_input("Search Number / Name", "", placeholder="Search...")
                 q_g = "SELECT number as Number, name as Name FROM product_groups WHERE 1=1"
                 p_g = []
@@ -554,7 +594,7 @@ elif current_page == 'Stock':
                 df_g = pd.read_sql_query(q_g, conn, params=p_g)
                 st.dataframe(df_g, use_container_width=True, hide_index=True)
 
-            # --- 2. UNITS OF MEASUREMENT (Poza 14) ---
+            # 2. UNITS OF MEASUREMENT
             elif current_setting == "Units_of_measurement":
                 c_title, c_btn = st.columns([8, 2])
                 with c_title:
@@ -571,26 +611,45 @@ elif current_page == 'Stock':
                 df_u = pd.read_sql_query("SELECT name as 'Unit of measurement' FROM units_of_measurement ORDER BY name", conn)
                 st.dataframe(df_u, use_container_width=True, hide_index=True)
 
-            # --- 3. STORAGE LOCATIONS / CLIENȚI (Poza 15) ---
+            # 3. STORAGE LOCATIONS / CLIENȚI (POZA 15 + IMPORT CSV)
             elif current_setting == "Storage_locations":
-                c_title, c_btn1, c_btn2 = st.columns([6, 2, 2])
+                c_title, c_btn1, c_btn2, c_btn3 = st.columns([5, 2, 1.5, 2])
                 with c_title:
                     st.markdown("#### Storage locations (Virtual Depozite Clienți)")
+                
                 with c_btn1:
                     with st.popover("➕ Create Client/Location", use_container_width=True):
                         with st.form("add_loc_form"):
-                            l_name = st.text_input("Storage location Name (Client Name)")
+                            l_name = st.text_input("Storage location")
+                            l_site = st.text_input("Site", "Main site")
+                            l_code = st.text_input("Barcode")
                             if st.form_submit_button("Save"):
-                                conn.cursor().execute("INSERT OR IGNORE INTO storage_locations (name) VALUES (?)", (l_name,))
+                                conn.cursor().execute("INSERT OR IGNORE INTO storage_locations (name, site, barcode) VALUES (?, ?, ?)", (l_name, l_site, l_code))
                                 conn.commit()
                                 st.rerun()
 
                 with c_btn2:
-                    df_loc_exp = pd.read_sql_query("SELECT name as 'Storage location' FROM storage_locations ORDER BY name", conn)
-                    st.download_button("↓ CSV Export", data=df_loc_exp.to_csv(index=False), file_name="storage_locations.csv", mime="text/csv", use_container_width=True)
+                    df_loc_exp = pd.read_sql_query("SELECT name as 'Storage location', site as Site, barcode as Barcode FROM storage_locations ORDER BY name", conn)
+                    st.download_button("↓ CSV", data=df_loc_exp.to_csv(index=False), file_name="storage_locations.csv", mime="text/csv", use_container_width=True)
 
-                l_search = st.text_input("Search Location / Client", "", placeholder="Search...")
-                q_l = "SELECT id as ID, name as 'Storage location' FROM storage_locations WHERE 1=1"
+                with c_btn3:
+                    with st.popover("↑ Import from CSV", use_container_width=True):
+                        st.subheader("Import Storage Locations")
+                        loc_csv = st.file_uploader("Încarcă storage_locations.csv", type=['csv'], key="loc_csv_up")
+                        if loc_csv is not None:
+                            try:
+                                df_loc_up = pd.read_csv(loc_csv)
+                                st.write("Aperçu:")
+                                st.dataframe(df_loc_up.head(3))
+                                if st.button("🚀 Execută Importul Locații"):
+                                    a, u = process_storage_locations_csv(df_loc_up)
+                                    st.success(f"Import finalizat! Adăugate: {a}, Actualizate: {u}.")
+                                    st.rerun()
+                            except Exception as e:
+                                st.error(f"Eroare: {e}")
+
+                l_search = st.text_input("Search Storage location", "", placeholder="Search...")
+                q_l = "SELECT id as ID, name as 'Storage location', site as Site, barcode as Barcode FROM storage_locations WHERE 1=1"
                 p_l = []
                 if l_search:
                     q_l += " AND name LIKE ?"
